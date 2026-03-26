@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { BarChart, Bar as RBar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import IntelligenceChat from "./IntelligenceChat";
+import PinnedInsights from "./PinnedInsights";
+import OneOnOnePrep from "./OneOnOnePrep";
+import EscalationChain from "./EscalationChain";
+import TeamHealth from "./TeamHealth";
+import TeamCompare from "./TeamCompare";
 
 const C = {
   bg:       "#030B15",
@@ -67,12 +72,9 @@ function PriorityPill({ pri }) {
   );
 }
 function Avatar({ initials, size=36 }) {
-  const safeInitials = initials || "?";
-  const c1 = safeInitials.charCodeAt(0) || 0;
-  const c2 = safeInitials.charCodeAt(1) || c1;
-  const hue = ((c1*7+c2*13)%60)+200;
+  const hue = ((initials.charCodeAt(0)*7+initials.charCodeAt(1)*13)%60)+200;
   return (
-    <div style={{ width:size, height:size, borderRadius:"50%", flexShrink:0, background:`hsl(${hue},40%,14%)`, border:`1px solid hsl(${hue},40%,26%)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*.32, fontWeight:700, color:`hsl(${hue},70%,68%)`, fontFamily:"'Barlow Condensed',sans-serif", letterSpacing:"0.04em" }}>{safeInitials}</div>
+    <div style={{ width:size, height:size, borderRadius:"50%", flexShrink:0, background:`hsl(${hue},40%,14%)`, border:`1px solid hsl(${hue},40%,26%)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*.32, fontWeight:700, color:`hsl(${hue},70%,68%)`, fontFamily:"'Barlow Condensed',sans-serif", letterSpacing:"0.04em" }}>{initials}</div>
   );
 }
 function Card({ children, style, onClick }) {
@@ -207,10 +209,256 @@ function TicketModal({ ticket, onClose }) {
 
 // ── Screens (same as before — Overview, TeamLeave, TimeLogs, Tickets, People) ──
 
-function Overview({ overview={}, people=[], tickets=[], timeLogs=[] }) {
+function TimeLogSection({ title, color, loggedByTeam={}, noLogByTeam={}, totalLogged=0, totalNotLogged=0, showBars }) {
+  const [open, setOpen] = useState(false);
+  const [openTeams, setOpenTeams] = useState({});
+  const toggleTeam = (t) => setOpenTeams(prev => ({ ...prev, [t]: !prev[t] }));
+  const allHours = Object.values(loggedByTeam).flatMap(members => members.map(m => m.hours));
+  const maxHours = allHours.length > 0 ? Math.max(...allHours, 1) : 1;
+
+  return (
+    <div style={{ border:`1px solid ${C.border}`, borderRadius:12, overflow:"hidden", marginBottom:12 }}>
+      <div onClick={()=>setOpen(o=>!o)} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", background:C.card, cursor:"pointer" }}
+        onMouseEnter={e=>e.currentTarget.style.background="#0c1a2e"} onMouseLeave={e=>e.currentTarget.style.background=C.card}>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:C.white }}>{title}</div>
+          <div style={{ fontSize:11, color:C.dimmer, marginTop:2 }}>
+            <span style={{ color:C.green }}>{totalLogged} logged</span> · <span style={{ color }}>{totalNotLogged} not logged</span>
+          </div>
+        </div>
+        <Chevron open={open}/>
+      </div>
+      {open && (
+        <div style={{ padding:"12px 20px 16px", background:C.bg }}>
+          {showBars && Object.keys(loggedByTeam || {}).length > 0 && (
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:10, letterSpacing:"0.12em", color:C.dimmer, textTransform:"uppercase", fontWeight:600, marginBottom:10 }}>Who Logged Time (by team)</div>
+              {Object.entries(loggedByTeam).sort(([a],[b])=>a.localeCompare(b)).map(([team, members]) => (
+                <div key={team} style={{ marginBottom:8 }}>
+                  <div onClick={()=>toggleTeam("logged-"+team)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"6px 0" }}>
+                    <span style={{ fontSize:12, fontWeight:600, color:C.white }}>{team}</span>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:11, color:C.green, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:600 }}>{members.reduce((s,m)=>s+m.hours,0).toFixed(1)}h</span>
+                      <span style={{ fontSize:10, color:C.dimmer }}>{members.length} people</span>
+                      <Chevron open={openTeams["logged-"+team]}/>
+                    </div>
+                  </div>
+                  {openTeams["logged-"+team] && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:4, paddingLeft:8, marginTop:4 }}>
+                      {members.sort((a,b)=>b.hours-a.hours).map(m => (
+                        <div key={m.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"4px 8px", background:C.card, borderRadius:6 }}>
+                          <span style={{ fontSize:12, color:C.dim, width:120, flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</span>
+                          <div style={{ flex:1, background:"rgba(255,255,255,0.07)", borderRadius:99, height:6, overflow:"hidden" }}>
+                            <div style={{ width:`${Math.min((m.hours/maxHours)*100,100)}%`, height:"100%", background:C.green, borderRadius:99, transition:"width .3s" }}/>
+                          </div>
+                          <span style={{ fontSize:11, color:C.green, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:600, minWidth:35, textAlign:"right" }}>{m.hours.toFixed(1)}h</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {Object.keys(noLogByTeam || {}).length > 0 && (
+            <div>
+              <div style={{ fontSize:10, letterSpacing:"0.12em", color:C.dimmer, textTransform:"uppercase", fontWeight:600, marginBottom:10 }}>Not Logged</div>
+              {Object.entries(noLogByTeam).sort(([a],[b])=>a.localeCompare(b)).map(([team, members]) => (
+                <div key={team} style={{ marginBottom:6 }}>
+                  <div onClick={()=>toggleTeam("nolog-"+team)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"6px 0" }}>
+                    <span style={{ fontSize:12, fontWeight:600, color:C.white }}>{team}</span>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:11, color, fontWeight:600 }}>{members.length}</span>
+                      <Chevron open={openTeams["nolog-"+team]}/>
+                    </div>
+                  </div>
+                  {openTeams["nolog-"+team] && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:3, paddingLeft:8, marginTop:4 }}>
+                      {members.map(m => (
+                        <div key={m.id} style={{ padding:"5px 10px", background:C.card, borderRadius:6, fontSize:12, color:C.dim }}>{m.name}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {Object.keys(noLogByTeam || {}).length === 0 && (
+            <div style={{ color:C.green, padding:12, textAlign:"center", fontSize:12 }}>Everyone logged time!</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NoTimeLogModal({ onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch("/api/no-timelog").then(r=>r.json()).then(d=>{ setData(d); setLoading(false); }).catch(()=>setLoading(false));
+  }, []);
+  if (!onClose) return null;
+
+  function exportCSV(period) {
+    if (!data) return;
+    const src = period === "today" ? data.today : data.yesterday;
+    let csv = "Team,Name,Status\n";
+    Object.entries(src.no_log_by_team || {}).forEach(([team, members]) => {
+      members.forEach(m => { csv += `"${team}","${m.name}","Not Logged"\n`; });
+    });
+    Object.entries(src.logged_by_team || {}).forEach(([team, members]) => {
+      members.forEach(m => { csv += `"${team}","${m.name}","${m.hours}h"\n`; });
+    });
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `timelog-${period}-${new Date().toISOString().split("T")[0]}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:28, width:"90%", maxWidth:700, maxHeight:"85vh", display:"flex", flexDirection:"column" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <div>
+            <div style={{ fontSize:18, fontWeight:700, color:C.white }}>Time Log Status</div>
+            <div style={{ fontSize:12, color:C.dimmer, marginTop:4 }}>{data ? `${data.total_users} team members tracked` : "Loading..."}</div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            {data && <button onClick={()=>exportCSV("today")} style={{ background:C.blue, color:C.white, border:"none", borderRadius:8, padding:"7px 14px", fontSize:11, fontWeight:600, cursor:"pointer" }}>CSV Today</button>}
+            {data && <button onClick={()=>exportCSV("yesterday")} style={{ background:"none", border:`1px solid ${C.borderHi}`, color:C.white, borderRadius:8, padding:"7px 14px", fontSize:11, fontWeight:600, cursor:"pointer" }}>CSV Yesterday</button>}
+            <button onClick={onClose} style={{ background:"none", border:`1px solid ${C.border}`, color:C.dim, borderRadius:8, padding:"7px 12px", cursor:"pointer", fontSize:14 }}>&times;</button>
+          </div>
+        </div>
+
+        {/* Team summary strip */}
+        {data && data.team_summary && (
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16 }}>
+            {Object.entries(data.team_summary).sort(([a],[b])=>a.localeCompare(b)).map(([team, s]) => (
+              <div key={team} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 10px", fontSize:10 }}>
+                <span style={{ color:C.white, fontWeight:600 }}>{team}</span>
+                <span style={{ color:C.dimmer }}> · </span>
+                <span style={{ color:C.green }}>{s.today_total.toFixed(1)}h</span>
+                <span style={{ color:C.dimmer }}> today · </span>
+                <span style={{ color:C.blueLight }}>{s.yesterday_total.toFixed(1)}h</span>
+                <span style={{ color:C.dimmer }}> yest</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ flex:1, overflowY:"auto" }}>
+          {loading && <div style={{ color:C.dimmer, padding:20 }}>Loading...</div>}
+          {data && (
+            <>
+              <TimeLogSection
+                title="Today's Time Log"
+                color={C.amber}
+                loggedByTeam={data.today.logged_by_team}
+                noLogByTeam={data.today.no_log_by_team}
+                totalLogged={data.today.total_logged}
+                totalNotLogged={data.today.total_not_logged}
+                showBars={true}
+              />
+              <TimeLogSection
+                title="Yesterday's Time Log"
+                color={C.red}
+                loggedByTeam={data.yesterday.logged_by_team}
+                noLogByTeam={data.yesterday.no_log_by_team}
+                totalLogged={data.yesterday.total_logged}
+                totalNotLogged={data.yesterday.total_not_logged}
+                showBars={true}
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkloadByTeam({ workload=[], memberHours=[] }) {
+  const [openTeams, setOpenTeams] = useState({});
+  const toggleTeam = (t) => setOpenTeams(prev => ({ ...prev, [t]: !prev[t] }));
+
+  // Group memberHours by team
+  const membersByTeam = {};
+  for (const m of memberHours) {
+    if (!m.team) continue;
+    if (!membersByTeam[m.team]) membersByTeam[m.team] = [];
+    membersByTeam[m.team].push({ id: m.id, name: m.name, hours: parseFloat(m.hours_today || 0), tickets: parseInt(m.open_tickets || 0) });
+  }
+
+  // Max hours for bar scaling
+  const allHours = memberHours.map(m => parseFloat(m.hours_today || 0)).filter(h => h > 0);
+  const maxHours = allHours.length > 0 ? Math.max(...allHours) : 8;
+
+  return (
+    <Card style={{ padding:0, overflow:"hidden" }}>
+      <div style={{ padding:"18px 22px 14px" }}><Label size={11}>Workload by Team</Label></div>
+      <Divider/>
+      <div style={{ padding:"4px 0" }}>
+        {workload.length === 0 && <div style={{ padding:20, color:C.dimmer, fontSize:13 }}>No team data available</div>}
+        {workload.map((w, i) => {
+          const pct = (w.avg_tickets_per_person / 10) * 100;
+          const col = pct > 80 ? C.red : pct > 60 ? C.amber : C.blue;
+          const members = membersByTeam[w.team] || [];
+          const teamHoursTotal = members.reduce((s, m) => s + m.hours, 0);
+          const isOpen = openTeams[w.team];
+
+          return (
+            <div key={w.team}>
+              <div onClick={() => toggleTeam(w.team)} style={{ padding:"12px 22px", cursor:"pointer", transition:"background .15s" }}
+                onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.03)"}
+                onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ fontSize:13, fontWeight:600, color:C.white }}>{w.team}</span>
+                    <span style={{ fontSize:10, color:C.dimmer, background:C.card, padding:"2px 8px", borderRadius:4 }}>{w.member_count} members</span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                    <span style={{ fontSize:11, color:C.green, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:600 }}>{teamHoursTotal.toFixed(1)}h today</span>
+                    <span style={{ fontSize:11, color:col, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:700 }}>avg {w.avg_tickets_per_person} tickets</span>
+                    <Chevron open={isOpen}/>
+                  </div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <Bar pct={pct} color={col} h={4}/>
+                </div>
+              </div>
+
+              {isOpen && members.length > 0 && (
+                <div style={{ padding:"0 22px 14px", background:C.bg }}>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                    {members.sort((a, b) => b.hours - a.hours).map(m => (
+                      <div key={m.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"5px 10px", background:C.card, borderRadius:6 }}>
+                        <span style={{ fontSize:12, color:C.dim, width:130, flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</span>
+                        <div style={{ flex:1, background:"rgba(255,255,255,0.07)", borderRadius:99, height:6, overflow:"hidden" }}>
+                          <div style={{ width:`${Math.min((m.hours / maxHours) * 100, 100)}%`, height:"100%", background: m.hours > 0 ? C.green : C.red+"44", borderRadius:99, transition:"width .3s" }}/>
+                        </div>
+                        <span style={{ fontSize:11, color: m.hours > 0 ? C.green : C.red, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:600, minWidth:35, textAlign:"right" }}>{m.hours > 0 ? m.hours.toFixed(1) + "h" : "—"}</span>
+                        <span style={{ fontSize:10, color:C.dimmer, minWidth:45, textAlign:"right" }}>{m.tickets} tix</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {i < workload.length - 1 && <Divider/>}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function Overview({ overview={}, people=[], tickets=[], timeLogs=[], currentUser=null }) {
   const { kpis={}, projects=[], workload=[] } = overview;
   const DEFAULT_PROJS = ["icast", "iclaims", "reports", "liability", "ilpus"];
   const [selectedProjs, setSelectedProjs] = useState([]);
+  const [showNoTimeLog, setShowNoTimeLog] = useState(false);
 
   // Set defaults on mount
   useEffect(() => {
@@ -224,6 +472,9 @@ function Overview({ overview={}, people=[], tickets=[], timeLogs=[] }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:24, animation:"fadeIn .4s ease" }}>
+      {/* ── PINNED INSIGHTS ── */}
+      <PinnedInsights currentUser={currentUser}/>
+
       {/* ── ALERTS BAR ── */}
       {(kpis.overdue_tickets > 0 || kpis.no_time_log > 0) && (
         <div style={{ background:C.red+"12", border:`1px solid ${C.red}44`, borderRadius:12, padding:"12px 20px", display:"flex", alignItems:"center", gap:10 }}>
@@ -235,22 +486,36 @@ function Overview({ overview={}, people=[], tickets=[], timeLogs=[] }) {
       )}
 
       {/* ── TOP STATS ── */}
-      <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:20 }}>
-        {[
-          { label:"Headcount", val: `${(kpis.headcount || 0) - (kpis.on_leave || 0)} / ${kpis.headcount || 0}`, color:C.white, sub:"Present / Active Total" },
-          { label:"On Leave", val:kpis.on_leave || 0, color:C.amber, sub:"Today" },
-          { label:"Overdue", val:kpis.overdue_tickets || 0, color:C.red, sub:"Need attention" },
-          { label:"No Time Log", val:kpis.no_time_log || 0, color:C.amber, sub:"End of day" }
-        ].map(k=>(
-          <Card key={k.label}>
-            <Label>{k.label}</Label>
-            <BigNum value={k.val} color={k.color}/>
-            <div style={{ fontSize:11, color:C.dimmer, marginTop:6 }}>{k.sub}</div>
-          </Card>
-        ))}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:16 }}>
+        <Card>
+          <Label>Headcount</Label>
+          <BigNum value={`${(kpis.headcount || 0) - (kpis.on_leave || 0)} / ${kpis.headcount || 0}`} color={C.white}/>
+          <div style={{ fontSize:11, color:C.dimmer, marginTop:6 }}>Present / Assigned</div>
+        </Card>
+        <Card>
+          <Label>On Leave</Label>
+          <BigNum value={kpis.on_leave || 0} color={C.amber}/>
+          <div style={{ fontSize:11, color:C.dimmer, marginTop:6 }}>Today</div>
+        </Card>
+        <Card>
+          <Label>Yesterday Hours</Label>
+          <BigNum value={parseFloat(kpis.yesterday_hours || 0).toFixed(1)} color={C.green} size={32}/>
+          <div style={{ fontSize:11, color:C.dimmer, marginTop:6 }}>Total logged</div>
+        </Card>
+        <Card>
+          <Label>Overdue</Label>
+          <BigNum value={kpis.overdue_tickets || 0} color={C.red}/>
+          <div style={{ fontSize:11, color:C.dimmer, marginTop:6 }}>Need attention</div>
+        </Card>
+        <Card onClick={()=>setShowNoTimeLog(true)} style={{ cursor:"pointer" }}>
+          <Label>No Time Log</Label>
+          <BigNum value={kpis.no_time_log || 0} color={C.amber}/>
+          <div style={{ fontSize:11, color:C.blueLight, marginTop:6 }}>Click to view &rarr;</div>
+        </Card>
       </div>
+      {showNoTimeLog && <NoTimeLogModal onClose={()=>setShowNoTimeLog(false)}/>}
 
-      <div className="two-col" style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:16 }}>
         {/* Project Deadlines */}
         <Card style={{ padding:0, overflow:"hidden" }}>
           <div style={{ padding:"12px 22px 10px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -296,38 +561,15 @@ function Overview({ overview={}, people=[], tickets=[], timeLogs=[] }) {
           </div>
         </Card>
 
-        {/* Workload by Team — Bar Chart */}
-        <Card style={{ padding:0, overflow:"hidden" }}>
-          <div style={{ padding:"18px 22px 14px" }}><Label size={11}>Workload by Team</Label></div>
-          <Divider/>
-          <div style={{ padding:"12px 16px 8px" }}>
-            {workload.length === 0 && <div style={{ padding:20, color:C.dimmer, fontSize:13 }}>No team data available</div>}
-            {workload.length > 0 && (
-              <>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={workload} margin={{ top: 8, right: 16, bottom: 0, left: -20 }}>
-                    <XAxis dataKey="team" tick={{ fill: 'rgba(240,244,255,0.45)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: 'rgba(240,244,255,0.45)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ background: '#070F1C', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, color: '#F0F4FF', fontSize: 12 }} cursor={{ fill: 'rgba(255,255,255,0.04)' }} formatter={(v) => [`${v} avg tickets`, 'Workload']} />
-                    <RBar dataKey="avg_tickets_per_person" radius={[4,4,0,0]}>
-                      {workload.map((w) => {
-                        const pct = (w.avg_tickets_per_person / 10) * 100;
-                        const col = pct > 80 ? '#E03E3E' : pct > 60 ? '#C97C1A' : '#1A6EF5';
-                        return <Cell key={w.team} fill={col} />;
-                      })}
-                    </RBar>
-                  </BarChart>
-                </ResponsiveContainer>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginTop:10, paddingBottom:4 }}>
-                  {workload.map((w) => (
-                    <span key={w.team} style={{ fontSize:10, color:'rgba(240,244,255,0.45)', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:6, padding:"3px 8px" }}>{w.team}: {w.member_count}</span>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </Card>
+        {/* Workload by Team */}
+        <WorkloadByTeam workload={workload} memberHours={overview.memberHours || []}/>
       </div>
+
+      {/* ── TEAM HEALTH BADGES ── */}
+      <TeamHealth currentUser={currentUser}/>
+
+      {/* ── ESCALATION CHAIN ── */}
+      <EscalationChain currentUser={currentUser}/>
     </div>
   );
 }
@@ -350,19 +592,11 @@ function TeamLeave({ people=[], onSelectPerson }) {
           </Card>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {Object.entries(teamGroups).map(([team, members]) => {
           const onL = members.filter(m => m.leave).length;
           return (
-            <Card key={team} style={{ padding: 0, overflow: "hidden" }}>
-              <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{team}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {onL > 0 && <span style={{ fontSize: 11, color: C.amber }}>{onL} on leave</span>}
-                  <span style={{ fontSize: 11, color: C.dimmer }}>{members.length} members</span>
-                </div>
-              </div>
-              <Divider />
+            <TeamAccordion key={team} teamName={team} count={`${members.length} members`} meta={onL > 0 ? `${onL} on leave` : null}>
               {members.map((m, i) => (
                 <div key={m.id || i}>
                   <div onClick={() => onSelectPerson(m)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 20px", cursor: "pointer", transition: "background .12s" }}
@@ -381,7 +615,7 @@ function TeamLeave({ people=[], onSelectPerson }) {
                   {i < members.length - 1 && <Divider />}
                 </div>
               ))}
-            </Card>
+            </TeamAccordion>
           );
         })}
       </div>
@@ -395,14 +629,6 @@ function TimeLogs({ timeLogs=[] }) {
   const teamGroups = groupBy(timeLogs, "team");
   const missing = timeLogs.filter(t => !t.logged);
   const totalHours = timeLogs.reduce((s, m) => s + (m.h || 0), 0).toFixed(1);
-
-  // Build team totals for bar chart
-  const teamTotals = Object.entries(groupBy(timeLogs, 'team')).map(([team, members]) => ({
-    team,
-    hours: members.reduce((s, m) => s + (m.h || 0), 0),
-    logged: members.filter(m => m.logged).length,
-    total: members.length,
-  }));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -424,23 +650,6 @@ function TimeLogs({ timeLogs=[] }) {
           </Card>
         ))}
       </div>
-      {teamTotals.length > 0 && (
-        <div style={{ background: '#0A1628', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '16px 20px' }}>
-          <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(240,244,255,0.22)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 12 }}>Hours Logged Today — By Team</div>
-          <ResponsiveContainer width="100%" height={150}>
-            <BarChart data={teamTotals} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-              <XAxis dataKey="team" tick={{ fill: 'rgba(240,244,255,0.45)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(240,244,255,0.45)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: '#070F1C', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v}h`, 'Hours']} />
-              <RBar dataKey="hours" radius={[4,4,0,0]} fill="#1A6EF5">
-                {teamTotals.map((t) => (
-                  <Cell key={t.team} fill={t.logged === t.total ? '#1A9E6E' : t.logged === 0 ? '#E03E3E' : '#1A6EF5'} />
-                ))}
-              </RBar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
       {missing.length > 0 && (
         <div style={{ background: C.red + "12", border: `1px solid ${C.red}44`, borderRadius: 12, padding: "12px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -452,20 +661,12 @@ function TimeLogs({ timeLogs=[] }) {
           <button style={{ background: C.red + "22", border: `1px solid ${C.red}55`, color: C.red, borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Send reminders</button>
         </div>
       )}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {Object.entries(teamGroups).map(([team, members]) => {
           const miss = members.filter(m => !m.logged).length;
           const teamTotal = members.reduce((s, m) => s + (m.h || 0), 0).toFixed(1);
           return (
-            <Card key={team} style={{ padding: 0, overflow: "hidden" }}>
-              <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{team}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {miss > 0 && <span style={{ fontSize: 11, color: C.red }}>{miss} missing</span>}
-                  <span style={{ fontSize: 12, color: C.blueLight, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 700 }}>{teamTotal}h logged</span>
-                </div>
-              </div>
-              <Divider />
+            <TeamAccordion key={team} teamName={team} count={`${teamTotal}h logged`} meta={miss > 0 ? `${miss} missing` : null}>
               {members.map((m, i) => (
                 <div key={m.name}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 20px" }}>
@@ -488,7 +689,7 @@ function TimeLogs({ timeLogs=[] }) {
                   {i < members.length - 1 && <Divider />}
                 </div>
               ))}
-            </Card>
+            </TeamAccordion>
           );
         })}
       </div>
@@ -523,42 +724,10 @@ function Tickets({ tickets=[], onSelectTicket }) {
     return `${parts[0]} ${parts[parts.length-1][0]}.`;
   }
 
-  // Status distribution for donut chart
-  const statusCounts = ['In Progress','Review','Blocked','Todo'].map(s => ({
-    name: s,
-    value: filteredTix.filter(t => t.status === s).length,
-    color: statusColor(s)
-  })).filter(s => s.value > 0);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {filteredTix.length > 0 && (
-        <div style={{ display: 'flex', gap: 24, alignItems: 'center', background: '#0A1628', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '16px 24px', marginBottom: 4 }}>
-          <ResponsiveContainer width={120} height={120}>
-            <PieChart>
-              <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={2} dataKey="value">
-                {statusCounts.map((s) => <Cell key={s.name} fill={s.color} />)}
-              </Pie>
-              <Tooltip contentStyle={{ background: '#070F1C', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, fontSize: 12 }} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            {statusCounts.map(s => (
-              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.color }} />
-                <span style={{ fontSize: 12, color: 'rgba(240,244,255,0.45)' }}>{s.name}</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#F0F4FF', fontFamily: "'Barlow Condensed',sans-serif" }}>{s.value}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 32, fontWeight: 700, color: '#F0F4FF', lineHeight: 1 }}>{filteredTix.length}</div>
-            <div style={{ fontSize: 10, color: 'rgba(240,244,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total Open</div>
-          </div>
-        </div>
-      )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, flex: 1, maxWidth: 800 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, flex: 1, maxWidth: 800 }}>
           {[
             { label: "Open", val: filteredTix.length, color: C.white },
             { label: "Overdue", val: overdueCount, color: overdueCount ? C.red : C.green },
@@ -628,7 +797,7 @@ function Tickets({ tickets=[], onSelectTicket }) {
 }
 
 
-function People({ people=[], onSelectPerson }) {
+function People({ people=[], onSelectPerson, onPrepOneOnOne }) {
   const teamGroups = groupBy(people, "team");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -636,18 +805,18 @@ function People({ people=[], onSelectPerson }) {
         const onL = members.filter(m => m.leave).length;
         return (
           <TeamAccordion key={team} teamName={team} count={`${members.length} members`} meta={onL > 0 ? `${onL} on leave` : null}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 100px 100px 100px 80px", gap: 16, padding: "8px 10px", marginBottom: 4 }}>
-              {["Name", "Role", "Tickets", "Working", "Hours", "Status"].map(h => (<div key={h} style={{ fontSize: 9, color: C.dimmer, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{h}</div>))}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 100px 100px 100px 80px 90px", gap: 16, padding: "8px 10px", marginBottom: 4 }}>
+              {["Name", "Role", "Tickets", "Working", "Hours", "Status", ""].map(h => (<div key={h} style={{ fontSize: 9, color: C.dimmer, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{h}</div>))}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {members.map((m, i) => {
                 const pct = (m.worked / 45) * 100; const col = pct > 80 ? C.red : pct > 60 ? C.amber : C.blue;
                 return (
                   <div key={m.id || i}>
-                    <div onClick={() => onSelectPerson(m)} style={{ display: "grid", gridTemplateColumns: "1fr 140px 100px 100px 100px 80px", gap: 16, padding: "11px 10px", cursor: "pointer", borderRadius: 8, transition: "background .12s", alignItems: "center" }}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 100px 100px 100px 80px 90px", gap: 16, padding: "11px 10px", cursor: "pointer", borderRadius: 8, transition: "background .12s", alignItems: "center" }}
                       onMouseEnter={e => e.currentTarget.style.background = "#0c1a2e"}
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div onClick={() => onSelectPerson(m)} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <Avatar initials={m.initials} size={32} />
                         <div><div style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{m.name}</div><div style={{ fontSize: 10, color: C.dimmer, marginTop: 1 }}>{m.team}</div></div>
                       </div>
@@ -659,6 +828,23 @@ function People({ people=[], onSelectPerson }) {
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         {m.leave ? <><Dot color={C.amber} pulse /><span style={{ fontSize: 11, color: C.amber }}>{m.leave}</span></> : <><Dot color={C.green} /><span style={{ fontSize: 11, color: C.dim }}>Active</span></>}
                       </div>
+
+                      <button
+                        onClick={e => { e.stopPropagation(); onPrepOneOnOne && onPrepOneOnOne(m); }}
+                        style={{
+                          background: C.blue+"18", border: `1px solid ${C.blue}44`,
+                          color: C.blueLight, borderRadius: 6, padding: "5px 10px",
+                          fontSize: 10, fontWeight: 600, cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: 4,
+                          fontFamily: "'Barlow', sans-serif", transition: "all .15s",
+                          letterSpacing: "0.02em",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = C.blue+"33"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = C.blue+"18"; }}
+                      >
+                        <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7v1a7 7 0 0 1-14 0V9a7 7 0 0 1 7-7z"/><path d="M8 21h8M12 17v4"/></svg>
+                        1-on-1
+                      </button>
                     </div>
                     {i < members.length - 1 && <Divider />}
                   </div>
@@ -680,53 +866,462 @@ const NAV_ICONS = {
   Tickets:  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>,
   People:   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>,
   Admin:    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 9.36l-7.1 7.1a1 1 0 0 1-1.4 0l-2.8-2.8a1 1 0 0 1 0-1.4l7.1-7.1a6 6 0 0 1 9.36-7.94z"/></svg>,
+  Intelligence: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7v1a7 7 0 0 1-14 0V9a7 7 0 0 1 7-7z"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="9" r="1" fill="currentColor"/></svg>,
 };
-const NAV_ITEMS = ["Overview","Team","Time","Tickets","People","Admin"];
+const NAV_ITEMS = ["Overview","Team","Time","Tickets","People","Admin","Intelligence"];
 
-function AdminTeamBlock({ team, members, unmapped, onAdd, onRemove, onToggleLead }) {
+function TelegramWebhookCard() {
+  const [webhookInfo, setWebhookInfo] = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [registering, setRegistering] = useState(false);
+  const [customUrl, setCustomUrl]     = useState('');
+  const [result, setResult]           = useState(null);
+
+  const defaultUrl = typeof window !== 'undefined' ? window.location.origin : '';
+
+  useEffect(() => {
+    fetch('/api/admin/telegram-setup')
+      .then(r => r.json())
+      .then(d => { setWebhookInfo(d?.result || null); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  async function registerWebhook() {
+    setRegistering(true);
+    setResult(null);
+    const url = customUrl.trim() || defaultUrl;
+    try {
+      const res = await fetch('/api/admin/telegram-setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      setResult(data);
+      if (data.ok) {
+        // Refresh webhook info
+        const info = await fetch('/api/admin/telegram-setup').then(r => r.json());
+        setWebhookInfo(info?.result || null);
+      }
+    } catch (e) {
+      setResult({ ok: false, description: e.message });
+    }
+    setRegistering(false);
+  }
+
+  const isRegistered = webhookInfo?.url && webhookInfo.url.length > 0;
+  const pendingCount = webhookInfo?.pending_update_count || 0;
+
   return (
-    <Card style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 16, fontWeight: 700, color: C.white }}>{team}</span>
-        <span style={{ fontSize: 11, color: C.dimmer }}>{members.length} members</span>
+    <Card style={{ padding: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <Label size={13}>Telegram Bot Webhook</Label>
+        {!loading && (
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+            background: isRegistered ? 'rgba(26,158,110,0.15)' : 'rgba(224,62,62,0.15)',
+            color: isRegistered ? C.green : C.red,
+          }}>
+            {isRegistered ? 'REGISTERED' : 'NOT SET'}
+          </span>
+        )}
       </div>
-      <Divider />
-      <div style={{ padding: "16px 20px", minHeight: 120 }}>
-        <div style={{ position:"relative", marginBottom: 16 }}>
-          <select value="" onChange={e => { if(e.target.value) onAdd(parseInt(e.target.value), team); }} 
-                  style={{ width: "100%", padding: "10px 14px", background: C.surface, border: `1px solid ${C.border}`, color: C.dimmer, borderRadius: 8, cursor: "pointer", appearance: "none", fontSize: 13 }}>
-            <option value="" disabled>+ Add Member</option>
-            {unmapped.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-          <div style={{ position:"absolute", right:14, top:12, pointerEvents:"none" }}>
-            <Chevron open={false}/>
+
+      {loading ? (
+        <div style={{ color: C.dim, fontSize: 13 }}>Checking webhook status...</div>
+      ) : (
+        <>
+          {isRegistered && (
+            <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 14, marginBottom: 16, fontSize: 12 }}>
+              <div style={{ color: C.dim, marginBottom: 6 }}>Current webhook URL</div>
+              <div style={{ color: C.blueLight, wordBreak: 'break-all' }}>{webhookInfo.url}</div>
+              {pendingCount > 0 && (
+                <div style={{ marginTop: 8, color: C.amber }}>⚠ {pendingCount} pending update{pendingCount !== 1 ? 's' : ''} in queue</div>
+              )}
+              {webhookInfo.last_error_message && (
+                <div style={{ marginTop: 8, color: C.red }}>Last error: {webhookInfo.last_error_message}</div>
+              )}
+            </div>
+          )}
+
+          <div style={{ fontSize: 12, color: C.dim, marginBottom: 10 }}>
+            Domain to register <span style={{ color: C.dimmer }}>(leave blank to use current: <b style={{ color: C.white }}>{defaultUrl}</b>)</span>
           </div>
-        </div>
-        
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {members.map(m => (
-            <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: m.is_team_lead ? C.blue+"11" : C.bg, border: `1px solid ${m.is_team_lead ? C.blueLight+"44" : C.border}`, padding: "8px 12px", borderRadius: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Avatar initials={m.initials} size={28} />
-                <span style={{ fontSize: 13, color: m.is_team_lead ? C.blueLight : C.white, fontWeight: m.is_team_lead ? 600 : 500 }}>{m.name}</span>
-                {m.is_team_lead && <div style={{ fontSize: 9, background: C.blueLight+"33", color: C.blueLight, padding: "2px 6px", borderRadius: 4, textTransform: "uppercase", fontWeight: 700 }}>Lead</div>}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input
+              type="text"
+              placeholder={`${defaultUrl} (default)`}
+              value={customUrl}
+              onChange={e => setCustomUrl(e.target.value)}
+              style={{ flex: 1, padding: '10px 14px', borderRadius: 8, background: C.bg, border: `1px solid ${C.border}`, color: C.white, fontSize: 13 }}
+            />
+            <button
+              onClick={registerWebhook}
+              disabled={registering}
+              style={{ background: C.blue, color: C.white, border: 'none', borderRadius: 8, padding: '0 20px', fontWeight: 700, cursor: registering ? 'not-allowed' : 'pointer', opacity: registering ? 0.6 : 1, whiteSpace: 'nowrap' }}
+            >
+              {registering ? 'Registering...' : isRegistered ? 'Re-register' : 'Register Webhook'}
+            </button>
+          </div>
+
+          {result && (
+            <div style={{
+              marginTop: 12, padding: '10px 14px', borderRadius: 8, fontSize: 12,
+              background: result.ok ? 'rgba(26,158,110,0.12)' : 'rgba(224,62,62,0.12)',
+              color: result.ok ? C.green : C.red,
+              border: `1px solid ${result.ok ? 'rgba(26,158,110,0.3)' : 'rgba(224,62,62,0.3)'}`,
+            }}>
+              {result.ok
+                ? `✓ Webhook registered → ${result.webhookUrl}`
+                : `✗ ${result.description || result.error}`}
+            </div>
+          )}
+
+          <div style={{ marginTop: 14, fontSize: 11, color: C.dimmer }}>
+            This is a <b>one-time setup</b>. Only re-register if the domain changes. Adding new bot users only requires updating their Telegram ID in Dashboard Users above.
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function DashboardUsersCard() {
+  const [users, setUsers]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [editingId, setEditingId] = useState(null); // null | 'new' | number
+  const [form, setForm]         = useState({});
+  const [saving, setSaving]     = useState(false);
+
+  const ROLES = ['manager', 'team_lead'];
+  const inp = { width: '100%', padding: '7px 10px', borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: C.white, fontSize: 12, outline: 'none', boxSizing: 'border-box' };
+  const lbl = { fontSize: 11, color: C.dimmer, marginBottom: 3 };
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    const res = await fetch('/api/admin/dashboard-users');
+    const d   = await res.json();
+    setUsers(d.users || []);
+    setLoading(false);
+  }
+
+  function startEdit(u) {
+    setEditingId(u.id);
+    setForm({ display_name: u.display_name, role: u.role, team: u.team || '', telegram_id: u.telegram_id || '', active: u.active });
+  }
+
+  function startNew() {
+    setEditingId('new');
+    setForm({ username: '', password: '', display_name: '', role: 'team_lead', team: '', telegram_id: '' });
+  }
+
+  async function save() {
+    setSaving(true);
+    if (editingId === 'new') {
+      if (!form.username?.trim() || !form.password?.trim() || !form.display_name?.trim())
+        { alert('Username, password and display name are required'); setSaving(false); return; }
+      const res = await fetch('/api/admin/dashboard-users', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, telegram_id: form.telegram_id ? Number(form.telegram_id) : null }),
+      });
+      const d = await res.json();
+      if (!res.ok) { alert(d.error || 'Save failed'); setSaving(false); return; }
+    } else {
+      await fetch('/api/admin/dashboard-users', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingId, ...form, telegram_id: form.telegram_id ? Number(form.telegram_id) : null }),
+      });
+    }
+    setEditingId(null); setForm({});
+    await load();
+    setSaving(false);
+  }
+
+  async function toggleActive(u) {
+    await fetch('/api/admin/dashboard-users', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id, active: !u.active }),
+    });
+    setUsers(users.map(x => x.id === u.id ? { ...x, active: !x.active } : x));
+  }
+
+  const roleColor = r => r === 'manager' ? C.blue : C.amber;
+
+  if (loading) return null;
+
+  return (
+    <Card style={{ padding: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <Label size={13}>Dashboard Users & Bot Access</Label>
+        <button onClick={startNew} style={{ background: C.blue, color: C.white, border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>+ Add User</button>
+      </div>
+
+      {/* User list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: editingId ? 16 : 0 }}>
+        {users.map(u => (
+          <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.bg, border: `1px solid ${u.active ? C.border : C.border + '60'}`, borderRadius: 8, opacity: u.active ? 1 : 0.5 }}>
+            {/* Avatar */}
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: roleColor(u.role) + '22', border: `1px solid ${roleColor(u.role)}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: roleColor(u.role), flexShrink: 0 }}>
+              {(u.display_name || u.username).slice(0, 1).toUpperCase()}
+            </div>
+            {/* Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{u.display_name}</span>
+                <span style={{ fontSize: 10, color: C.dimmer }}>@{u.username}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: roleColor(u.role), background: roleColor(u.role) + '18', border: `1px solid ${roleColor(u.role)}40`, borderRadius: 4, padding: '1px 7px', textTransform: 'uppercase' }}>{u.role}</span>
+                {u.team && <span style={{ fontSize: 10, color: C.dim, background: C.card, borderRadius: 4, padding: '1px 7px' }}>{u.team}</span>}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={() => onToggleLead(m.id, !m.is_team_lead)} style={{ background: "none", border: "none", color: m.is_team_lead ? C.amber : C.dimmer, fontSize: 11, cursor: "pointer" }}>{m.is_team_lead ? "Unmark" : "Lead"}</button>
-                <div style={{ width: 1, height: 12, background: C.border }} />
-                <button onClick={() => onRemove(m.id)} style={{ background: "none", border: "none", color: C.red, fontSize: 16, cursor: "pointer", lineHeight: 1 }}>×</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 11, color: C.dimmer }}>
+                <span title="Telegram ID">
+                  {u.telegram_id
+                    ? <span style={{ color: '#29b6f6' }}>✈ {u.telegram_id}</span>
+                    : <span style={{ color: C.dimmer, fontStyle: 'italic' }}>no Telegram</span>}
+                </span>
               </div>
             </div>
-          ))}
-        </div>
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button onClick={() => startEdit(u)} style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: C.dim, borderRadius: 5, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>Edit</button>
+              <button onClick={() => toggleActive(u)} style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: u.active ? '#ef4444' : '#22c55e', borderRadius: 5, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>
+                {u.active ? 'Deactivate' : 'Activate'}
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
+
+      {/* Add / Edit form */}
+      {editingId && (
+        <div style={{ background: C.bg, border: `1px solid ${C.borderHi}`, borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.white, marginBottom: 14 }}>
+            {editingId === 'new' ? 'New Dashboard User' : `Edit — ${users.find(u => u.id === editingId)?.display_name}`}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {editingId === 'new' && <>
+              <div>
+                <div style={lbl}>Username</div>
+                <input value={form.username || ''} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="vivek" style={inp} />
+              </div>
+              <div>
+                <div style={lbl}>Password</div>
+                <input type="password" value={form.password || ''} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" style={inp} />
+              </div>
+            </>}
+            <div>
+              <div style={lbl}>Display Name</div>
+              <input value={form.display_name || ''} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} placeholder="Vivek Kumar" style={inp} />
+            </div>
+            <div>
+              <div style={lbl}>Role</div>
+              <select value={form.role || 'team_lead'} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
+                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={lbl}>Team</div>
+              <input value={form.team || ''} onChange={e => setForm(f => ({ ...f, team: e.target.value }))} placeholder="QA / Java / DB …" style={inp} />
+            </div>
+            <div>
+              <div style={lbl}>Telegram ID <span style={{ color: C.dimmer, fontWeight: 400 }}>(numeric)</span></div>
+              <input value={form.telegram_id || ''} onChange={e => setForm(f => ({ ...f, telegram_id: e.target.value }))} placeholder="e.g. 8600897389" style={inp} />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: C.dimmer, marginTop: 10 }}>
+            To get a Telegram ID: ask the user to message <span style={{ color: C.blueLight }}>@userinfobot</span> on Telegram — it replies with their numeric ID.
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+            <button onClick={() => { setEditingId(null); setForm({}); }} style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: C.dim, borderRadius: 6, padding: '6px 16px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={save} disabled={saving} style={{ background: C.blue, color: C.white, border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : editingId === 'new' ? 'Create User' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function AIConfigCard() {
+  const [configs, setConfigs]     = useState([]);
+  const [effective, setEffective] = useState(null);
+  const [editingId, setEditingId] = useState(null); // null | 'new' | number
+  const [form, setForm]           = useState({});
+  const [saving, setSaving]       = useState(false);
+
+  const PROVIDERS    = ['openrouter', 'anthropic', 'openai'];
+  const PROVIDER_URL = { openrouter: 'https://openrouter.ai/api/v1', anthropic: 'https://api.anthropic.com/v1', openai: 'https://api.openai.com/v1' };
+  const PCOLOR       = { openrouter: '#8b5cf6', anthropic: '#f97316', openai: '#10b981' };
+  const pColor       = p => PCOLOR[p] || C.blueLight;
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    const res = await fetch('/api/admin/ai-config');
+    const d   = await res.json();
+    setConfigs(d.configs   || []);
+    setEffective(d.effective || null);
+  }
+
+  const active  = configs.find(c => c.is_active);
+  const history = configs.filter(c => !c.is_active);
+
+  function startEdit(cfg) {
+    setEditingId(cfg.id);
+    setForm({ provider: cfg.provider, api_key: '', base_url: cfg.base_url || '', default_model: cfg.default_model || '', embedding_model: cfg.embedding_model || '' });
+  }
+
+  function startNew() {
+    setEditingId('new');
+    setForm({ provider: 'openrouter', api_key: '', base_url: PROVIDER_URL.openrouter, default_model: '', embedding_model: 'openai/text-embedding-3-small' });
+  }
+
+  async function save() {
+    if (!form.default_model.trim()) return alert('Model name is required');
+    if (editingId === 'new' && !form.api_key.trim()) return alert('API key is required');
+    setSaving(true);
+    const body = editingId === 'new' ? form : { id: editingId, ...form };
+    const res  = await fetch('/api/admin/ai-config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) { alert('Save failed'); setSaving(false); return; }
+    setEditingId(null);
+    setForm({});
+    await load();
+    setSaving(false);
+  }
+
+  async function restore(id) {
+    setSaving(true);
+    await fetch('/api/admin/ai-config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, is_active: true }) });
+    await load();
+    setSaving(false);
+  }
+
+  const disp = effective;
+  const inp  = { width: '100%', padding: '8px 12px', borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: C.white, fontSize: 12, outline: 'none', boxSizing: 'border-box' };
+  const lbl  = { fontSize: 11, color: C.dimmer, marginBottom: 4 };
+
+  return (
+    <Card style={{ padding: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <Label size={13}>AI Configuration</Label>
+        <button onClick={startNew} style={{ background: C.blue, color: C.white, border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>+ New Config</button>
+      </div>
+
+      {/* Active / effective config display */}
+      {(!editingId || editingId === 'new') && disp && (
+        <div style={{ background: C.bg, border: `1px solid ${pColor(disp.provider)}44`, borderRadius: 10, padding: 16, marginBottom: editingId === 'new' ? 16 : 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: pColor(disp.provider) + '22', border: `1px solid ${pColor(disp.provider)}66`, borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: pColor(disp.provider), textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {disp.provider}
+              </div>
+              {disp.source === 'env' && (
+                <div style={{ fontSize: 10, color: C.amber, background: C.amber + '18', border: `1px solid ${C.amber}44`, borderRadius: 4, padding: '2px 8px' }}>env fallback — not in DB</div>
+              )}
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 5px #22c55e88' }} title="Active" />
+            </div>
+            {active && (
+              <button onClick={() => startEdit(active)} style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: C.dim, borderRadius: 6, padding: '4px 12px', fontSize: 11, cursor: 'pointer' }}>Edit</button>
+            )}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 28px' }}>
+            <div>
+              <div style={lbl}>Model</div>
+              <div style={{ fontSize: 12, color: C.white, fontFamily: 'monospace', wordBreak: 'break-all' }}>{disp.default_model || '—'}</div>
+            </div>
+            <div>
+              <div style={lbl}>API Key</div>
+              <div style={{ fontSize: 12, color: C.white, fontFamily: 'monospace' }}>{disp.api_key_preview || '••••••••'}</div>
+            </div>
+            <div>
+              <div style={lbl}>Base URL</div>
+              <div style={{ fontSize: 11, color: C.dim, wordBreak: 'break-all' }}>{disp.base_url || '—'}</div>
+            </div>
+            <div>
+              <div style={lbl}>Embedding Model</div>
+              <div style={{ fontSize: 11, color: C.dim, fontFamily: 'monospace' }}>{disp.embedding_model || '—'}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit / New form */}
+      {editingId && (
+        <div style={{ background: C.bg, border: `1px solid ${C.borderHi}`, borderRadius: 10, padding: 16, marginTop: editingId === 'new' ? 0 : 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.white, marginBottom: 14 }}>
+            {editingId === 'new' ? 'New Configuration' : 'Edit Active Configuration'}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={lbl}>Provider</div>
+              <select value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value, base_url: PROVIDER_URL[e.target.value] || f.base_url }))}
+                style={{ ...inp, cursor: 'pointer' }}>
+                {PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={lbl}>API Key {editingId !== 'new' && <span style={{ color: C.dimmer, fontWeight: 400 }}>(blank = keep current)</span>}</div>
+              <input type="password" value={form.api_key} onChange={e => setForm(f => ({ ...f, api_key: e.target.value }))}
+                placeholder={editingId !== 'new' ? '(unchanged)' : 'sk-or-v1-...'} style={inp} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <div style={lbl}>Model</div>
+              <input value={form.default_model} onChange={e => setForm(f => ({ ...f, default_model: e.target.value }))}
+                placeholder="e.g. nvidia/nemotron-3-super-120b-a12b:free" style={inp} />
+            </div>
+            <div>
+              <div style={lbl}>Base URL</div>
+              <input value={form.base_url} onChange={e => setForm(f => ({ ...f, base_url: e.target.value }))} style={inp} />
+            </div>
+            <div>
+              <div style={lbl}>Embedding Model</div>
+              <input value={form.embedding_model} onChange={e => setForm(f => ({ ...f, embedding_model: e.target.value }))}
+                placeholder="openai/text-embedding-3-small" style={inp} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+            <button onClick={() => { setEditingId(null); setForm({}); }}
+              style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: C.dim, borderRadius: 6, padding: '6px 16px', fontSize: 12, cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={save} disabled={saving}
+              style={{ background: C.blue, color: C.white, border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : editingId === 'new' ? 'Save & Activate' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Config history */}
+      {history.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 11, color: C.dimmer, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Previous Configs</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {history.map(cfg => (
+              <div key={cfg.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: pColor(cfg.provider), textTransform: 'uppercase' }}>{cfg.provider}</div>
+                  <div style={{ fontSize: 11, color: C.dim, fontFamily: 'monospace' }}>{cfg.default_model}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ fontSize: 10, color: C.dimmer }}>{new Date(cfg.created_at).toLocaleDateString()}</div>
+                  <button onClick={() => restore(cfg.id)} disabled={saving}
+                    style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: C.blueLight, borderRadius: 4, padding: '3px 10px', fontSize: 10, cursor: 'pointer' }}>
+                    Restore
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
 
 function Admin() {
   const [users, setUsers] = useState([]);
-  const [inactive, setInactive] = useState([]);
   const [projects, setProjects] = useState([]);
   const [sheetUrl, setSheetUrl] = useState("");
   const [loading, setLoading] = useState(true);
@@ -737,33 +1332,23 @@ function Admin() {
       fetch('/api/admin/projects').then(r=>r.json())
     ]).then(([u, p]) => {
       setUsers(u.users || []);
-      setInactive(u.inactive || []);
       setProjects(p.projects || []);
       setLoading(false);
     });
   }, []);
 
-  const TEAMS = ["AI", "DB", "QA", "Java", "JS/UI", "DevOps", "Misc"];
+  const TEAMS = [...new Set(users.map(u => u.team).filter(Boolean))].sort();
   const unmapped = users.filter(u => !u.team);
   const managers = users.filter(u => u.role === 'Manager' || projects.some(p => p.manager_id === u.id));
   const nonManagers = users.filter(u => !managers.find(m => m.id === u.id));
 
-  async function updateUser(id, field, val) {
+  async function updateUser(id, updates) {
     if (!id) return;
-    const u = users.find(x=>x.id===id) || inactive.find(x=>x.id===id);
+    const u = users.find(x=>x.id===id);
     if (!u) return;
-    const updates = typeof field === 'object' ? field : { [field]: val };
-    const body = { id, team: u.team, role: u.role, is_team_lead: u.is_team_lead, active: u.active, ...updates };
-    if (updates.active === false) {
-      setUsers(users.filter(x => x.id !== id));
-      setInactive([...inactive, { ...u, ...updates, team: null, is_team_lead: false }].sort((a,b) => a.name.localeCompare(b.name)));
-      body.team = null; body.is_team_lead = false;
-    } else if (updates.active === true) {
-      setInactive(inactive.filter(x => x.id !== id));
-      setUsers([...users, { ...u, ...updates }].sort((a,b) => a.name.localeCompare(b.name)));
-    } else {
-      setUsers(users.map(x => x.id===id ? { ...x, ...updates } : x));
-    }
+    const merged = typeof updates === 'object' ? updates : {};
+    const body = { id, team: u.team, role: u.role, is_team_lead: u.is_team_lead, ...merged };
+    setUsers(users.map(x => x.id===id ? { ...x, ...merged } : x));
     await fetch('/api/admin/users', { method: 'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   }
 
@@ -785,24 +1370,59 @@ function Admin() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 30 }}>
+      {/* AI Configuration Card */}
+      <AIConfigCard />
+
+      {/* Telegram Webhook Registration Card */}
+      <TelegramWebhookCard />
+
+      {/* Dashboard Users & Bot Access Card */}
+      <DashboardUsersCard />
+
+      {/* Google Sheets Sync Card */}
+      <Card style={{ padding: 24 }}>
+        <Label size={13}>Google Sheets Leave Sync</Label>
+        <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
+          <input type="text" placeholder="https://docs.google.com/spreadsheets/.../export?format=csv" value={sheetUrl} onChange={e=>setSheetUrl(e.target.value)} style={{ flex: 1, padding: "10px 14px", borderRadius: 8, background: C.bg, border: `1px solid ${C.border}`, color: C.white }} />
+          <button onClick={syncLeave} style={{ background: C.blue, color: C.white, border: "none", borderRadius: 8, padding: "0 20px", fontWeight: 600, cursor: "pointer" }}>Sync Leave</button>
+        </div>
+      </Card>
+
       {/* Teams Mapping Card */}
       <Card style={{ padding: 24 }}>
-        <div style={{ fontSize: 12, letterSpacing: "0.05em", color: C.dimmer, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Team Mapping & Leads</div>
-        <div style={{ fontSize: 13, color: C.dim, marginBottom: 20 }}>Unmapped employees: <span style={{ color: unmapped.length > 0 ? C.amber : C.dimmer }}>{unmapped.length}</span></div>
+        <Label size={13}>Team Mapping & Leads</Label>
+        <div style={{ marginTop: 10, fontSize: 12, color: C.dimmer }}>Unmapped employees: {unmapped.length}</div>
         
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginTop: 20 }}>
           {TEAMS.map(team => {
             const members = users.filter(u => u.team === team).sort((a,b)=> (b.is_team_lead?1:0) - (a.is_team_lead?1:0) || a.name.localeCompare(b.name));
             return (
-              <AdminTeamBlock 
-                key={team} 
-                team={team} 
-                members={members} 
-                unmapped={unmapped}
-                onAdd={(id, teamName) => updateUser(id, 'team', teamName)}
-                onRemove={(id) => updateUser(id, { team: null, is_team_lead: false })}
-                onToggleLead={(id, isLead) => updateUser(id, 'is_team_lead', isLead)}
-              />
+              <div key={team} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{team}</div>
+                  <div style={{ fontSize: 11, color: C.dim }}>{members.length} members</div>
+                </div>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+                  {members.map(m => (
+                    <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", background: C.card, borderRadius: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {m.is_team_lead && <svg width="12" height="12" viewBox="0 0 24 24" fill={C.amber} stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}
+                        <span style={{ fontSize: 12, color: m.is_team_lead ? C.amber : C.dim }}>{m.name}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button onClick={() => updateUser(m.id, { is_team_lead: !m.is_team_lead })} style={{ background: "none", border: "none", color: C.blueLight, fontSize: 10, cursor: "pointer", textTransform: "uppercase", fontWeight: 600 }}>{m.is_team_lead ? 'Revoke Lead' : 'Make Lead'}</button>
+                        <button onClick={() => updateUser(m.id, { team: null, is_team_lead: false })} style={{ background: "none", border: "none", color: C.dimmer, fontSize: 14, cursor: "pointer", lineHeight: 1 }}>&times;</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <select value="" onChange={e => updateUser(parseInt(e.target.value), { team })} style={{ width: "100%", padding: "8px 12px", borderRadius: 6, background: C.card, color: C.dim, border: `1px solid ${C.border}`, outline: "none", cursor: "pointer" }}>
+                  <option value="" disabled>+ Add Member</option>
+                  {unmapped.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
             );
           })}
         </div>
@@ -812,7 +1432,7 @@ function Admin() {
       <Card style={{ padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <Label size={13}>Project Managers</Label>
-          <select value="" onChange={e => updateUser(parseInt(e.target.value), 'role', 'Manager')} style={{ padding: "8px 16px", borderRadius: 8, background: C.blue, color: C.white, border: "none", outline: "none", cursor: "pointer", fontWeight: 600 }}>
+          <select value="" onChange={e => updateUser(parseInt(e.target.value), { role: 'Manager' })} style={{ padding: "8px 16px", borderRadius: 8, background: C.blue, color: C.white, border: "none", outline: "none", cursor: "pointer", fontWeight: 600 }}>
             <option value="" disabled>+ Designate new Manager</option>
             {nonManagers.map(nm => <option key={nm.id} value={nm.id}>{nm.name}</option>)}
           </select>
@@ -826,7 +1446,7 @@ function Admin() {
               <div key={mgr.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.blueLight }}>{mgr.name}</div>
-                  <button onClick={() => { updateUser(mgr.id, 'role', 'Member'); mProps.forEach(p => updateProject(p.id, null)); }} style={{ background: "none", border: `1px solid ${C.borderHi}`, color: C.dimmer, borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer" }}>Remove Manager</button>
+                  <button onClick={() => { updateUser(mgr.id, { role: 'Member' }); mProps.forEach(p => updateProject(p.id, null)); }} style={{ background: "none", border: `1px solid ${C.borderHi}`, color: C.dimmer, borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer" }}>Remove Manager</button>
                 </div>
                 
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
@@ -839,61 +1459,13 @@ function Admin() {
                   ))}
                 </div>
 
-                <div style={{ position:"relative" }}>
-                  <select value="" onChange={e => updateProject(parseInt(e.target.value), mgr.id)} style={{ width: "100%", padding: "8px 12px", borderRadius: 6, background: C.card, color: C.dim, border: `1px solid ${C.border}`, outline: "none", cursor: "pointer", appearance:"none" }}>
-                    <option value="" disabled>+ Assign Project</option>
-                    {availProps.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div style={{ position:"absolute", right:12, top:10, pointerEvents:"none" }}><Chevron open={false}/></div>
-                </div>
+                <select value="" onChange={e => updateProject(parseInt(e.target.value), mgr.id)} style={{ width: "100%", padding: "8px 12px", borderRadius: 6, background: C.card, color: C.dim, border: `1px solid ${C.border}`, outline: "none", cursor: "pointer" }}>
+                  <option value="" disabled>+ Assign Project</option>
+                  {availProps.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
               </div>
             );
           })}
-        </div>
-      </Card>
-
-      {/* Unmapped Users Card */}
-      {unmapped.length > 0 && (
-        <Card style={{ padding: 24 }}>
-          <div style={{ fontSize: 12, letterSpacing: "0.05em", color: C.dimmer, textTransform: "uppercase", fontWeight: 700, marginBottom: 16 }}>Unmapped Users ({unmapped.length})</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {unmapped.map(u => (
-              <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 8, background: C.bg, border: `1px solid ${C.border}`, padding: "6px 10px", borderRadius: 8 }}>
-                <Avatar initials={u.initials} size={24} />
-                <span style={{ fontSize: 12, color: C.white }}>{u.name}</span>
-                <button onClick={() => updateUser(u.id, { active: false })} title="Mark inactive" style={{ background: "none", border: "none", color: C.dimmer, fontSize: 14, cursor: "pointer", lineHeight: 1 }}>&times;</button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Inactive Users Card */}
-      <Card style={{ padding: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 12, letterSpacing: "0.05em", color: C.dimmer, textTransform: "uppercase", fontWeight: 700 }}>Inactive Users ({inactive.length})</div>
-        </div>
-        {inactive.length === 0 ? (
-          <div style={{ fontSize: 12, color: C.dimmer, fontStyle: "italic" }}>No inactive users</div>
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {inactive.map(u => (
-              <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 8, background: C.bg, border: `1px solid ${C.border}`, padding: "6px 10px", borderRadius: 8, opacity: 0.6 }}>
-                <Avatar initials={u.initials} size={24} />
-                <span style={{ fontSize: 12, color: C.dim }}>{u.name}</span>
-                <button onClick={() => updateUser(u.id, { active: true })} title="Reactivate" style={{ background: "none", border: "none", color: C.green, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Activate</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* Google Sheets Sync Card */}
-      <Card style={{ padding: 24 }}>
-        <Label size={13}>Google Sheets Leave Sync</Label>
-        <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
-          <input type="text" placeholder="https://docs.google.com/spreadsheets/.../export?format=csv" value={sheetUrl} onChange={e=>setSheetUrl(e.target.value)} style={{ flex: 1, padding: "10px 14px", borderRadius: 8, background: C.bg, border: `1px solid ${C.border}`, color: C.white }} />
-          <button onClick={syncLeave} style={{ background: C.blue, color: C.white, border: "none", borderRadius: 8, padding: "0 20px", fontWeight: 600, cursor: "pointer" }}>Sync Leave</button>
         </div>
       </Card>
     </div>
@@ -901,22 +1473,14 @@ function Admin() {
 }
 
 // ── ROOT EXPORT ───────────────────────────────────────────────────
-export default function Dashboard({ onLogout }) {
+export default function Dashboard({ onLogout, currentUser }) {
   const [screen, setScreen] = useState("Overview");
   const [data, setData]     = useState({ overview: {}, people: [], tickets: [], timeLogs: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [oneOnOnePerson, setOneOnOnePerson] = useState(null);
   const fetchingRef = React.useRef(false);
-
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth <= 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
 
   // Fetch all data
   async function fetchAll() {
@@ -954,11 +1518,18 @@ export default function Dashboard({ onLogout }) {
     setSyncing(true);
     try {
       const res = await fetch("/api/sync", { method: "POST" });
-      if (res.ok) await fetchAll();
-      else alert("Sync failed. Check terminal logs.");
+      if (res.ok) {
+        // Delta sync runs in background (~10-30s). Refresh data after 30s.
+        setTimeout(async () => {
+          await fetchAll();
+          setSyncing(false);
+        }, 30000);
+      } else {
+        alert("Sync failed. Check terminal logs.");
+        setSyncing(false);
+      }
     } catch (err) {
       alert("Network error during sync.");
-    } finally {
       setSyncing(false);
     }
   }
@@ -970,18 +1541,8 @@ export default function Dashboard({ onLogout }) {
 
   return (
     <div style={{ fontFamily:"'Barlow',sans-serif", background:C.bg, minHeight:"100vh", color:C.white, display:"flex" }}>
-      {/* ── MOBILE OVERLAY ── */}
-      {isMobile && sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)} style={{ position:"fixed", inset:0, background:"rgba(3,11,21,0.7)", zIndex:199 }} />
-      )}
-
       {/* ── SIDEBAR ── */}
-      <div
-        className={`sidebar${sidebarOpen ? ' open' : ''}`}
-        style={{ width:C.sidebarW, flexShrink:0, background:C.surface, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", height:"100vh", position:isMobile?"fixed":"sticky", top:0, zIndex:isMobile?200:"auto", transform:isMobile && !sidebarOpen?`translateX(-${C.sidebarW}px)`:"translateX(0)", transition:"transform 0.2s ease" }}>
-        {isMobile && (
-          <button onClick={() => setSidebarOpen(false)} style={{ position:"absolute", top:16, right:16, background:"none", border:"none", color:C.dimmer, fontSize:20, cursor:"pointer" }}>✕</button>
-        )}
+      <div style={{ width:C.sidebarW, flexShrink:0, background:C.surface, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", height:"100vh", position:"sticky", top:0 }}>
         <div style={{ padding:"28px 24px 24px" }}>
           <div style={{ fontSize:9, color:C.dimmer, letterSpacing:"0.16em", textTransform:"uppercase", marginBottom:4 }}>Command Centre</div>
           <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:20, fontWeight:700, color:C.white, letterSpacing:"-0.01em", lineHeight:1.1 }}>RedMine<br/>Dashboard</div>
@@ -991,7 +1552,7 @@ export default function Dashboard({ onLogout }) {
           {NAV_ITEMS.map(item=>{
             const active = screen===item;
             return (
-              <button key={item} onClick={()=>{ setScreen(item); if(isMobile) setSidebarOpen(false); }} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px", borderRadius:10, border:"none", cursor:"pointer", background:active?"rgba(26,110,245,0.15)":"transparent", color:active?C.blue:C.dim, fontSize:13, fontWeight:600, letterSpacing:"0.01em", transition:"all .15s", textAlign:"left", width:"100%" }}
+              <button key={item} onClick={()=>setScreen(item)} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px", borderRadius:10, border:"none", cursor:"pointer", background:active?"rgba(26,110,245,0.15)":"transparent", color:active?C.blue:C.dim, fontSize:13, fontWeight:600, letterSpacing:"0.01em", transition:"all .15s", textAlign:"left", width:"100%" }}
                 onMouseEnter={e=>{ if(!active) e.currentTarget.style.background="rgba(255,255,255,0.04)"; }}
                 onMouseLeave={e=>{ if(!active) e.currentTarget.style.background="transparent"; }}>
                 {NAV_ICONS[item]}{item}
@@ -1001,9 +1562,20 @@ export default function Dashboard({ onLogout }) {
           })}
         </nav>
 
-        {/* ── LOGOUT ── */}
+        {/* ── USER INFO + LOGOUT ── */}
         <div style={{ padding:"16px 12px", borderTop:`1px solid ${C.border}` }}>
-          <div style={{ fontSize:11, color:C.dimmer, marginBottom:8, paddingLeft:4 }}>22 Mar 2026 · Q1 — 11 days left</div>
+          {currentUser && (
+            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"0 4px", marginBottom:10 }}>
+              <div style={{ width:30, height:30, borderRadius:"50%", background:C.card, border:`1px solid ${C.borderHi}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:C.blueLight, fontFamily:"'Barlow Condensed',sans-serif", flexShrink:0 }}>
+                {(currentUser.display_name || currentUser.username || "U").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}
+              </div>
+              <div style={{ flex:1, overflow:"hidden" }}>
+                <div style={{ fontSize:12, fontWeight:600, color:C.white, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{currentUser.display_name || currentUser.username}</div>
+                <div style={{ fontSize:10, color:C.dimmer, marginTop:1, textTransform:"capitalize" }}>{currentUser.role?.replace("_"," ")}{currentUser.team ? ` · ${currentUser.team}` : ""}</div>
+              </div>
+            </div>
+          )}
+          <div style={{ fontSize:11, color:C.dimmer, marginBottom:8, paddingLeft:4 }}>{new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}</div>
           <button onClick={onLogout} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 14px", borderRadius:10, border:`1px solid ${C.border}`, background:"transparent", color:C.dim, fontSize:12, fontWeight:600, cursor:"pointer", transition:"all .15s", fontFamily:"'Barlow',sans-serif" }}
             onMouseEnter={e=>{ e.currentTarget.style.borderColor=C.red+"66"; e.currentTarget.style.color=C.red; }}
             onMouseLeave={e=>{ e.currentTarget.style.borderColor=C.border; e.currentTarget.style.color=C.dim; }}>
@@ -1016,26 +1588,18 @@ export default function Dashboard({ onLogout }) {
       </div>
 
       {/* ── MAIN ── */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:isMobile?"auto":"hidden" }}>
-        <div style={{ padding:isMobile?"12px 16px":"20px 32px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center" }}>
-            {isMobile && (
-              <button onClick={() => setSidebarOpen(o => !o)} style={{ background:"none", border:`1px solid ${C.border}`, color:C.white, borderRadius:8, padding:"8px 10px", cursor:"pointer", marginRight:12, display:"flex", flexDirection:"column", gap:4, alignItems:"center", justifyContent:"center" }}>
-                <div style={{ width:18, height:2, background:C.white, borderRadius:1 }} />
-                <div style={{ width:18, height:2, background:C.white, borderRadius:1 }} />
-                <div style={{ width:18, height:2, background:C.white, borderRadius:1 }} />
-              </button>
-            )}
-            <div>
-              <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:24, fontWeight:700, color:C.white, letterSpacing:"-0.01em" }}>{screen}</div>
-              <div style={{ fontSize:11, color:C.dimmer, marginTop:2 }}>
-                {screen==="Overview" && "Company pulse — today"}
-                {screen==="Team"     && "Leave status by team"}
-                {screen==="Time"     && "Time logging snapshot"}
-                {screen==="Tickets"  && "Open issues tracker"}
-                {screen==="People"   && "Team performance"}
-                {screen==="Admin"    && "System configuration & data mapping"}
-              </div>
+      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+        <div style={{ padding:"20px 32px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+          <div>
+            <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:24, fontWeight:700, color:C.white, letterSpacing:"-0.01em" }}>{screen}</div>
+            <div style={{ fontSize:11, color:C.dimmer, marginTop:2 }}>
+              {screen==="Overview" && "Company pulse — today"}
+              {screen==="Team"     && "Leave status by team"}
+              {screen==="Time"     && "Time logging snapshot"}
+              {screen==="Tickets"  && "Open issues tracker"}
+              {screen==="People"   && "Team performance"}
+              {screen==="Admin"    && "System configuration & data mapping"}
+              {screen==="Intelligence" && "AI-powered insights & chat"}
             </div>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:16 }}>
@@ -1052,11 +1616,11 @@ export default function Dashboard({ onLogout }) {
                   <Dot color={C.red} pulse/><span style={{ fontSize:12, color:C.red, fontWeight:600 }}>{tickets.filter(t=>t.overdue).length} overdue</span>
                 </div>
               )}
-              <Avatar initials="CE" size={36}/>
+              <Avatar initials={currentUser ? (currentUser.display_name || currentUser.username || "U").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase() : "CE"} size={36}/>
             </div>
           </div>
         </div>
-        <div style={{ flex:1, overflowY:"auto", padding:isMobile?"16px":"28px 32px", position:"relative" }}>
+        <div style={{ flex:1, overflowY:"auto", padding:"28px 32px", position:"relative" }}>
           {loading && (
             <div style={{ position:"absolute", inset:0, background:C.bg+"99", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 }}>
               <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:16 }}>
@@ -1067,18 +1631,25 @@ export default function Dashboard({ onLogout }) {
           )}
           {error && <div style={{ color:C.red, padding:20, background:C.red+"11", borderRadius:12, border:`1px solid ${C.red}33` }}>{error}</div>}
           
-          {screen==="Overview" && <Overview overview={overview} people={people} tickets={tickets} timeLogs={timeLogs}/>}
-          {screen==="Team"     && <TeamLeave people={people} onSelectPerson={setPerson}/>}
+          {screen==="Overview" && <Overview overview={overview} people={people} tickets={tickets} timeLogs={timeLogs} currentUser={currentUser}/>}
+          {screen==="Team"     && (
+            <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
+              <TeamLeave people={people} onSelectPerson={setPerson}/>
+              <TeamCompare teams={overview.workload||[]} people={people} tickets={tickets} timeLogs={timeLogs}/>
+            </div>
+          )}
           {screen==="Time"     && <TimeLogs timeLogs={timeLogs}/>}
           {screen==="Tickets"  && <Tickets tickets={tickets} onSelectTicket={setTicket}/>}
-          {screen==="People"   && <People people={people} onSelectPerson={setPerson}/>}
+          {screen==="People"   && <People people={people} onSelectPerson={setPerson} onPrepOneOnOne={setOneOnOnePerson}/>}
           {screen==="Admin"    && <Admin />}
+          {screen==="Intelligence" && <IntelligenceChat currentUser={currentUser}/>}
         </div>
 
       </div>
 
       <PersonModal person={person} onClose={()=>setPerson(null)}/>
       <TicketModal ticket={ticket} onClose={()=>setTicket(null)}/>
+      <OneOnOnePrep person={oneOnOnePerson} onClose={()=>setOneOnOnePerson(null)}/>
     </div>
   );
 }

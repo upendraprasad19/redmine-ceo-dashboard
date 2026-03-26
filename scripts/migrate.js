@@ -1,83 +1,112 @@
 /**
  * scripts/migrate.js
- * One-time schema migration — run once then safe to re-run (all IF NOT EXISTS).
- * node scripts/migrate.js
+ * Runs all SQL migrations in order against the Neon PostgreSQL database.
+ *
+ * Usage:  node scripts/migrate.js
  */
+
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+
 import { neon } from '@neondatabase/serverless';
+import { readFileSync, readdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const sql = neon(process.env.DATABASE_URL);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = join(__dirname, 'migrations');
 
-async function migrate() {
-  console.log('Running migrations...\n');
-
-  // ── 1. Conversation history (AI chat memory per Telegram user) ─────────────
-  await sql`
-    CREATE TABLE IF NOT EXISTS conversation_history (
-      id           SERIAL PRIMARY KEY,
-      telegram_id  BIGINT NOT NULL,
-      role         TEXT NOT NULL CHECK (role IN ('user','assistant')),
-      content      TEXT NOT NULL,
-      created_at   TIMESTAMPTZ DEFAULT NOW()
-    )
-  `;
-  await sql`CREATE INDEX IF NOT EXISTS idx_conv_telegram_id ON conversation_history(telegram_id, created_at DESC)`;
-  console.log('✓ conversation_history');
-
-  // ── 2. Daily snapshots (trend data per team per day) ──────────────────────
-  await sql`
-    CREATE TABLE IF NOT EXISTS daily_snapshots (
-      snapshot_date   DATE NOT NULL,
-      team            TEXT NOT NULL,
-      open_tickets    INTEGER DEFAULT 0,
-      overdue_tickets INTEGER DEFAULT 0,
-      blocked_tickets INTEGER DEFAULT 0,
-      critical_tickets INTEGER DEFAULT 0,
-      closed_today    INTEGER DEFAULT 0,
-      hours_logged    DECIMAL(8,2) DEFAULT 0,
-      members_logged  INTEGER DEFAULT 0,
-      total_members   INTEGER DEFAULT 0,
-      avg_done_ratio  DECIMAL(5,2) DEFAULT 0,
-      PRIMARY KEY (snapshot_date, team)
-    )
-  `;
-  console.log('✓ daily_snapshots');
-
-  // ── 3. Anomaly alerts (dedup + track sent alerts) ─────────────────────────
-  await sql`
-    CREATE TABLE IF NOT EXISTS anomaly_alerts (
-      id           SERIAL PRIMARY KEY,
-      alert_type   TEXT NOT NULL,
-      entity_type  TEXT,
-      entity_id    INTEGER,
-      message      TEXT NOT NULL,
-      severity     TEXT DEFAULT 'warning' CHECK (severity IN ('info','warning','critical')),
-      sent_at      TIMESTAMPTZ DEFAULT NOW(),
-      resolved_at  TIMESTAMPTZ,
-      UNIQUE(alert_type, entity_id, entity_type)
-    )
-  `;
-  console.log('✓ anomaly_alerts');
-
-  // ── 4. Add telegram_chat_id to users if missing ───────────────────────────
-  await sql`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT
-  `;
-  console.log('✓ users.telegram_chat_id');
-
-  // ── 5. telegram_sessions table if missing ─────────────────────────────────
-  await sql`
-    CREATE TABLE IF NOT EXISTS telegram_sessions (
-      chat_id    TEXT PRIMARY KEY,
-      state      TEXT DEFAULT 'idle',
-      context    JSONB DEFAULT '{}',
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `;
-  console.log('✓ telegram_sessions');
-
-  console.log('\n✅ All migrations complete.');
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('ERROR: DATABASE_URL not found in .env.local');
+  process.exit(1);
 }
 
-migrate().catch(e => { console.error('Migration failed:', e.message); process.exit(1); });
+const sql = neon(DATABASE_URL);
+
+/**
+ * Split SQL into individual statements, respecting $$ blocks and DO blocks.
+ */
+function splitStatements(content) {
+  const statements = [];
+  let current = '';
+  let inDollarBlock = false;
+
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Skip comment-only lines at top level
+    if (!inDollarBlock && trimmed.startsWith('--') && current.trim() === '') continue;
+
+    // Track $$ blocks (function bodies, DO blocks)
+    const dollarMatches = (line.match(/\$\$/g) || []).length;
+    if (dollarMatches % 2 !== 0) {
+      inDollarBlock = !inDollarBlock;
+    }
+
+    current += line + '\n';
+
+    // If we're not inside a $$ block and line ends with ;, split here
+    if (!inDollarBlock && trimmed.endsWith(';')) {
+      const stmt = current.trim();
+      if (stmt && stmt !== ';') statements.push(stmt);
+      current = '';
+    }
+  }
+
+  // Catch any trailing statement without ;
+  if (current.trim()) statements.push(current.trim());
+  return statements;
+}
+
+async function runMigrations() {
+  console.log('=== Company OS — Database Migrations ===\n');
+
+  // Read all .sql files sorted alphabetically (001, 002, ...)
+  const files = readdirSync(migrationsDir)
+    .filter(f => f.endsWith('.sql'))
+    .sort();
+
+  if (files.length === 0) {
+    console.log('No migration files found.');
+    return;
+  }
+
+  console.log(`Found ${files.length} migration(s) to run.\n`);
+
+  let passed = 0;
+  let failed = 0;
+
+  for (const file of files) {
+    const filePath = join(migrationsDir, file);
+    const sqlContent = readFileSync(filePath, 'utf-8');
+
+    process.stdout.write(`Running migration ${file}... `);
+
+    try {
+      // Neon serverless driver doesn't support multiple statements in one call.
+      // Split by semicolons, but respect $$ blocks (PL/pgSQL function bodies).
+      const statements = splitStatements(sqlContent);
+      for (const stmt of statements) {
+        if (stmt.trim()) await sql(stmt);
+      }
+      console.log('done');
+      passed++;
+    } catch (err) {
+      console.log('FAILED');
+      console.error(`  Error: ${err.message}\n`);
+      failed++;
+    }
+  }
+
+  console.log(`\n=== Migrations complete: ${passed} passed, ${failed} failed ===`);
+
+  if (failed > 0) {
+    process.exit(1);
+  }
+}
+
+runMigrations().catch(err => {
+  console.error('Fatal error running migrations:', err);
+  process.exit(1);
+});

@@ -17,6 +17,7 @@ const C = {
 
 export default function LoginPage() {
   const router = useRouter();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
@@ -26,7 +27,7 @@ export default function LoginPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!password || loading) return;
+    if (!username || !password || loading) return;
 
     setLoading(true);
     setError('');
@@ -35,7 +36,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
 
       if (res.ok) {
@@ -43,7 +44,7 @@ export default function LoginPage() {
       } else {
         const data = await res.json();
         setAttempts(a => a + 1);
-        setError(data.error || 'Invalid password');
+        setError(data.error || 'Invalid credentials');
         setPassword('');
       }
     } catch {
@@ -70,7 +71,7 @@ export default function LoginPage() {
       }}/>
 
       <div style={{
-        width: "100%", maxWidth: 400,
+        width: "100%", maxWidth: 420,
         animation: "fadeIn .4s ease",
       }}>
         {/* Logo mark */}
@@ -110,12 +111,41 @@ export default function LoginPage() {
           <div style={{
             fontSize: 13, fontWeight: 600, color: C.white,
             marginBottom: 4,
-          }}>Restricted Access</div>
+          }}>Sign In</div>
           <div style={{
             fontSize: 12, color: C.dimmer, marginBottom: 28, lineHeight: 1.5,
-          }}>Enter your dashboard password to continue.</div>
+          }}>Enter your credentials to access the dashboard.</div>
 
           <form onSubmit={handleSubmit}>
+            {/* Username field */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{
+                fontSize: 9, letterSpacing: "0.13em", color: C.dimmer,
+                textTransform: "uppercase", fontWeight: 600, marginBottom: 8,
+              }}>Username</div>
+              <input
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="Enter username"
+                autoFocus
+                autoComplete="username"
+                disabled={loading}
+                style={{
+                  width: "100%",
+                  background: C.bg,
+                  border: `1px solid ${error ? C.red + "66" : C.borderHi}`,
+                  borderRadius: 10, padding: "12px 16px",
+                  fontSize: 14, color: C.white,
+                  outline: "none", transition: "border-color .15s",
+                  fontFamily: "'Barlow', sans-serif",
+                  boxSizing: "border-box",
+                }}
+                onFocus={e => e.target.style.borderColor = C.blue}
+                onBlur={e => e.target.style.borderColor = error ? C.red + "66" : C.borderHi}
+              />
+            </div>
+
             {/* Password field */}
             <div style={{ marginBottom: 16 }}>
               <div style={{
@@ -127,7 +157,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Enter password"
-                autoFocus
+                autoComplete="current-password"
                 disabled={loading}
                 style={{
                   width: "100%",
@@ -138,6 +168,7 @@ export default function LoginPage() {
                   outline: "none", transition: "border-color .15s",
                   fontFamily: "'Barlow', sans-serif",
                   letterSpacing: password ? "0.15em" : "normal",
+                  boxSizing: "border-box",
                 }}
                 onFocus={e => e.target.style.borderColor = C.blue}
                 onBlur={e => e.target.style.borderColor = error ? C.red + "66" : C.borderHi}
@@ -169,15 +200,15 @@ export default function LoginPage() {
             {/* Submit button */}
             <button
               type="submit"
-              disabled={!password || loading}
+              disabled={!username || !password || loading}
               style={{
                 width: "100%",
                 background: loading ? "rgba(26,110,245,0.5)" : C.blue,
                 border: "none", borderRadius: 10, padding: "13px",
                 fontSize: 13, fontWeight: 600, color: C.white,
-                cursor: (!password || loading) ? "not-allowed" : "pointer",
+                cursor: (!username || !password || loading) ? "not-allowed" : "pointer",
                 transition: "all .15s", letterSpacing: "0.03em",
-                opacity: (!password || loading) ? 0.7 : 1,
+                opacity: (!username || !password || loading) ? 0.7 : 1,
                 fontFamily: "'Barlow', sans-serif",
               }}
             >
@@ -203,7 +234,6 @@ export default function LoginPage() {
           Authorised personnel only · Session expires in 8 hours
         </div>
       </div>
-
     </div>
   );
 }

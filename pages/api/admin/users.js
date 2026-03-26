@@ -6,34 +6,27 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const users = await sql`
-        SELECT id, name, team, role, is_team_lead, active, initials
-        FROM users
-        WHERE active = true
+        SELECT id, name, team, role, is_team_lead, active 
+        FROM users 
+        WHERE active = true 
         ORDER BY team NULLS LAST, name
       `;
-      const inactive = await sql`
-        SELECT id, name, team, role, is_team_lead, active, initials
-        FROM users
-        WHERE active = false
-        ORDER BY name
-      `;
-      return res.status(200).json({ users, inactive });
+      return res.status(200).json({ users });
     }
 
     if (req.method === 'PUT') {
-      const { id, team, role, is_team_lead, active } = req.body;
+      const { id, team, role, is_team_lead } = req.body;
       if (!id) return res.status(400).json({ error: 'User ID is required' });
 
       const result = await sql`
-        UPDATE users
-        SET
-          team = ${team || null},
-          role = ${role || null},
+        UPDATE users 
+        SET 
+          team = ${team || null}, 
+          role = ${role || null}, 
           is_team_lead = ${is_team_lead || false},
-          active = ${active !== undefined ? active : true},
           updated_at = NOW()
         WHERE id = ${id}
-        RETURNING id, name, team, role, is_team_lead, active, initials
+        RETURNING id, name, team, role, is_team_lead
       `;
 
       return res.status(200).json({ user: result[0] });

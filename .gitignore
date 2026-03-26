@@ -1,7 +1,11 @@
 .env.local
 .env
+.env.*
 node_modules/
 .next/
 .vercel/
 .claude/
 *.log
+*.pdf
+tmp/
+tmp-*.js

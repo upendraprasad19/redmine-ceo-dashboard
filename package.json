@@ -2,29 +2,30 @@
   "name": "ceo-dashboard",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "sync": "node scripts/sync-redmine.js",
-    "bot": "node scripts/telegram-bot.js",
-    "notify:due": "node scripts/notify-due-tickets.js",
-    "notify:timelog": "node scripts/notify-timelog-reminder.js"
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed-admin.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.80.0",
     "@neondatabase/serverless": "^0.9.3",
+    "@slack/bolt": "^4.6.0",
+    "@upstash/redis": "^1.34.0",
+    "bcryptjs": "^2.4.3",
     "cookie": "^1.1.1",
-    "groq-sdk": "^1.1.1",
+    "jsonwebtoken": "^9.0.2",
     "next": "^16.2.1",
+    "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
-    "node-telegram-bot-api": "^0.67.0",
-    "nodemailer": "^8.0.3",
+    "nodemailer": "^6.9.13",
+    "openai": "^4.58.0",
     "pg": "^8.11.3",
     "react": "^18",
     "react-dom": "^18",
-    "recharts": "^2.15.4"
+    "telegraf": "^4.16.3"
   },
   "devDependencies": {
     "dotenv": "^16.4.5"

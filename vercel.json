@@ -5,12 +5,60 @@
       "schedule": "0 1 * * *"
     },
     {
-      "path": "/api/cron/snapshot",
-      "schedule": "0 20 * * 1-5"
+      "path": "/api/sync-full",
+      "schedule": "0 1 * * 6"
     },
     {
-      "path": "/api/cron/anomaly",
-      "schedule": "30 2 * * 1-5"
+      "path": "/api/cron/run?job=standup",
+      "schedule": "0 9 * * 1-5"
+    },
+    {
+      "path": "/api/cron/run?job=pm-brief",
+      "schedule": "5 9 * * 1-5"
+    },
+    {
+      "path": "/api/cron/run?job=ceo-brief",
+      "schedule": "10 9 * * 1-5"
+    },
+    {
+      "path": "/api/cron/run?job=eod-alert",
+      "schedule": "0 18 * * 1-5"
+    },
+    {
+      "path": "/api/cron/run?job=capacity",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/run?job=silence",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/run?job=reports",
+      "schedule": "0 16 * * 5"
+    },
+    {
+      "path": "/api/cron/run?job=performance",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/run?job=insights",
+      "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/cron/run?job=team-health",
+      "schedule": "10 0 * * *"
+    },
+    {
+      "path": "/api/cron/run?job=memory-compress",
+      "schedule": "0 0 * * 0"
+    },
+    {
+      "path": "/api/cron/run?job=pulse-digest",
+      "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/run?job=predictions",
+      "schedule": "30 8 * * 1"
     }
   ]
 }

@@ -46,18 +46,3 @@ input:-webkit-autofill {
   -webkit-box-shadow: 0 0 0 100px #0A1628 inset !important;
   -webkit-text-fill-color: #F0F4FF !important;
 }
-
-/* ── Mobile Responsive ─────────────────────────────────────── */
-@media (max-width: 768px) {
-  /* Hide sidebar, show hamburger */
-  .sidebar { display: none !important; }
-  .sidebar.open { display: flex !important; position: fixed; z-index: 200; }
-  .hamburger { display: flex !important; }
-}
-
-@media (max-width: 1024px) {
-  /* Collapse 4-column KPI grid to 2 */
-  .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
-  /* Stack 2-col layout to single col */
-  .two-col { grid-template-columns: 1fr !important; }
-}

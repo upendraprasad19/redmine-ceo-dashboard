@@ -20,8 +20,10 @@ export function middleware(request) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Validate session token
-  if (session.value !== process.env.SESSION_SECRET) {
+  // Basic JWT structure check (3 base64 parts separated by dots)
+  // Full verification happens in API routes via getCurrentUser()
+  const parts = session.value.split('.');
+  if (parts.length !== 3) {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
