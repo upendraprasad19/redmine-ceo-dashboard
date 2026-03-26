@@ -17,10 +17,6 @@
       "schedule": "30 13 * * 5"
     },
     {
-      "path": "/api/cron/reminder-delivery",
-      "schedule": "*/15 * * * *"
-    },
-    {
       "path": "/api/cron/learning-layer",
       "schedule": "30 20 * * 0"
     }
