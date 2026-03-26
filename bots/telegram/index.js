@@ -7,10 +7,11 @@
 const { Telegraf } = require('telegraf');
 const { getDb } = require('../../lib/db');
 const { chat } = require('../../lib/ai');
-const { getRecentMessages, saveMessage } = require('../../lib/redis');
+const { getRecentMessages, saveMessage, getRedis } = require('../../lib/redis');
 const { tools } = require('../../lib/gpt-tools');
 const { executeToolCall } = require('../../lib/gpt-executor');
 const { buildSystemPrompt } = require('./prompt');
+const { startOnboarding, handleOnboardingCallback, handleOnboardingText } = require('./onboarding');
 
 // ── Initialize bot ──
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
@@ -55,7 +56,38 @@ bot.start(async (ctx) => {
     ? `Hello ${user.display_name || user.username}! 👋\n\nI'm your Company OS Intelligence Assistant. I have access to all teams and projects.\n\nYou can ask me things like:\n• "Show overdue tickets"\n• "Who hasn't logged time today?"\n• "Status of Project X"\n• "Prepare 1-on-1 for [Name]"\n• "Team health overview"`
     : `Hello ${user.display_name || user.username}! 👋\n\nI'm your Company OS Assistant for the *${user.team}* team.\n\nYou can ask me things like:\n• "Show my team's open tickets"\n• "Who's on leave this week?"\n• "Time log status for today"\n• "Prepare 1-on-1 for [Name]"\n• "Team workload check"`;
 
-  return ctx.reply(greeting, { parse_mode: 'Markdown' });
+  await ctx.reply(greeting, { parse_mode: 'Markdown' });
+
+  // Trigger onboarding if not done yet
+  if (!user.onboarding_completed) {
+    setTimeout(async () => {
+      try { await startOnboarding(ctx, user); } catch (e) { console.error('Onboarding error:', e.message); }
+    }, 1200);
+  }
+});
+
+// ── /preferences command — restart onboarding ──
+bot.command('preferences', async (ctx) => {
+  const user = ctx.botUser;
+  if (!user) return;
+  try {
+    const r = getRedis();
+    await r.del(`onboard:${user.id}`);
+  } catch (e) { /* ignore */ }
+  await startOnboarding(ctx, user);
+});
+
+// ── Callback query handler (onboarding buttons) ──
+bot.on('callback_query', async (ctx) => {
+  const user = ctx.botUser;
+  if (!user) return ctx.answerCbQuery('Not registered');
+  try {
+    const handled = await handleOnboardingCallback(ctx, user);
+    if (!handled) await ctx.answerCbQuery();
+  } catch (e) {
+    console.error('Callback query error:', e.message);
+    await ctx.answerCbQuery('Something went wrong');
+  }
 });
 
 // ── /help command ──
@@ -158,6 +190,14 @@ bot.on('text', async (ctx) => {
   const user = ctx.botUser;
   if (!user) return;
 
+  // Check if this text is part of the onboarding flow (e.g. challenge step free text)
+  try {
+    const onboardHandled = await handleOnboardingText(ctx, user);
+    if (onboardHandled) return;
+  } catch (e) {
+    console.error('Onboarding text check error:', e.message);
+  }
+
   const message = ctx.message.text;
 
   // Show "typing" indicator
@@ -210,6 +250,7 @@ bot.on('text', async (ctx) => {
           role: user.role,
           team: user.team,
           display_name: user.display_name,
+          linked_redmine_user_id: user.linked_redmine_user_id,
         });
 
         messages.push({
@@ -227,7 +268,20 @@ bot.on('text', async (ctx) => {
       reply = followUp.choices[0].message;
     }
 
-    const replyText = reply.content || 'I couldn\'t generate a response. Please try again.';
+    // If AI still has no text after tool rounds (stuck in tool-call mode), force a text-only response
+    let replyText = reply.content;
+    if (!replyText || replyText.trim() === '') {
+      try {
+        await ctx.sendChatAction('typing');
+        const forced = await chat(messages, null, null); // no tools = forces text
+        replyText = forced.choices[0].message.content;
+      } catch (e) {
+        console.error('Forced text fallback error:', e.message);
+      }
+    }
+    if (!replyText || replyText.trim() === '') {
+      replyText = '⚠️ I processed your request but couldn\'t generate a summary. Please try rephrasing.';
+    }
 
     // Save to Redis
     try {

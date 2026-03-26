@@ -16,6 +16,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const users = await sql`
         SELECT du.id, du.username, du.display_name, du.role, du.team, du.telegram_id, du.active, du.created_at,
+               du.behavior_profile, du.top_concerns, du.response_style, du.morning_briefing,
                u.email, u.name AS redmine_name
         FROM dashboard_users du
         LEFT JOIN users u ON u.id = du.linked_redmine_user_id
@@ -53,7 +54,7 @@ export default async function handler(req, res) {
 
     // PUT — update existing dashboard user
     if (req.method === 'PUT') {
-      const { id, role, team, active, telegram_id, display_name } = req.body;
+      const { id, role, team, active, telegram_id, display_name, behavior_profile, top_concerns, response_style, morning_briefing } = req.body;
 
       if (!id) return res.status(400).json({ error: 'User id is required' });
 
@@ -64,7 +65,11 @@ export default async function handler(req, res) {
           team = COALESCE(${team || null}, team),
           active = COALESCE(${active !== undefined ? active : null}, active),
           telegram_id = COALESCE(${telegram_id || null}, telegram_id),
-          display_name = COALESCE(${display_name || null}, display_name)
+          display_name = COALESCE(${display_name || null}, display_name),
+          response_style = COALESCE(${response_style || null}, response_style),
+          morning_briefing = COALESCE(${morning_briefing || null}, morning_briefing),
+          top_concerns = COALESCE(${top_concerns || null}, top_concerns),
+          behavior_profile = COALESCE(${behavior_profile ? JSON.stringify(behavior_profile) : null}::jsonb, behavior_profile)
         WHERE id = ${id}
       `;
 

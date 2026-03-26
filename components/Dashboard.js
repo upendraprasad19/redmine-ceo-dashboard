@@ -986,6 +986,80 @@ function TelegramWebhookCard() {
   );
 }
 
+const CONCERN_OPTIONS = [
+  { id: 'overdue_tickets',   label: 'Overdue Tickets' },
+  { id: 'missing_time_logs', label: 'Missing Time Logs' },
+  { id: 'blocked_tickets',   label: 'Blocked Tickets' },
+  { id: 'project_risks',     label: 'Project Risks' },
+  { id: 'team_health',       label: 'Team Health' },
+  { id: 'capacity',          label: 'Capacity / Workload' },
+];
+
+function UserDemandsCard() {
+  const [queries, setQueries] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const STATUS_COLORS = { unreviewed: C.dimmer, planned: C.amber, building: C.blueLight, done: C.green };
+  const FREQ_COLOR = f => f >= 5 ? C.red : f >= 3 ? C.amber : C.dim;
+
+  useEffect(() => {
+    fetch('/api/admin/unknown-queries').then(r => r.json()).then(d => {
+      setQueries(d.queries || []);
+      setLoading(false);
+    });
+  }, []);
+
+  async function updateStatus(id, status) {
+    setQueries(q => q.map(x => x.id === id ? { ...x, status } : x));
+    await fetch('/api/admin/unknown-queries', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    });
+  }
+
+  if (loading) return null;
+
+  return (
+    <Card style={{ padding: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <Label size={13}>User Demands — Bot Unknown Queries</Label>
+        <span style={{ fontSize: 11, color: C.dimmer }}>{queries.length} total</span>
+      </div>
+      {queries.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.dimmer, textAlign: 'center', padding: '20px 0' }}>No unknown queries yet — the bot logs here when it can't answer something.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {queries.map(q => (
+            <div key={q.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{q.query_text}</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {q.asked_by && <span style={{ fontSize: 11, color: C.dimmer }}>{q.asked_by}</span>}
+                  {q.user_role && <span style={{ fontSize: 10, color: C.dim, background: C.card, borderRadius: 4, padding: '1px 7px', textTransform: 'capitalize' }}>{q.user_role}</span>}
+                  {q.user_team && <span style={{ fontSize: 10, color: C.dim, background: C.card, borderRadius: 4, padding: '1px 7px' }}>{q.user_team}</span>}
+                  <span style={{ fontSize: 11, color: FREQ_COLOR(q.frequency), fontWeight: 700 }}>{q.frequency}×</span>
+                  {q.suggested_alternative && (
+                    <span style={{ fontSize: 11, color: C.amber, fontStyle: 'italic' }}>Suggested: {q.suggested_alternative}</span>
+                  )}
+                </div>
+              </div>
+              <select
+                value={q.status}
+                onChange={e => updateStatus(q.id, e.target.value)}
+                style={{ background: C.card, border: `1px solid ${STATUS_COLORS[q.status]}44`, color: STATUS_COLORS[q.status], borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', outline: 'none', flexShrink: 0 }}>
+                {['unreviewed', 'planned', 'building', 'done'].map(s => (
+                  <option key={s} value={s} style={{ color: C.white, background: C.card }}>{s}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function DashboardUsersCard() {
   const [users, setUsers]           = useState([]);
   const [redmineUsers, setRedmineUsers] = useState([]);
@@ -1014,7 +1088,16 @@ function DashboardUsersCard() {
 
   function startEdit(u) {
     setEditingId(u.id);
-    setForm({ display_name: u.display_name, role: u.role, team: u.team || '', telegram_id: u.telegram_id || '', active: u.active });
+    const bp = typeof u.behavior_profile === 'string'
+      ? (() => { try { return JSON.parse(u.behavior_profile); } catch { return {}; } })()
+      : (u.behavior_profile || {});
+    setForm({
+      display_name: u.display_name, role: u.role, team: u.team || '',
+      telegram_id: u.telegram_id || '', active: u.active,
+      response_style: u.response_style || bp.response_style || 'adaptive',
+      morning_briefing: u.morning_briefing || bp.morning_briefing || 'none',
+      top_concerns: u.top_concerns || [],
+    });
     setManualEmail(false);
     setSearch('');
   }
@@ -1204,6 +1287,53 @@ function DashboardUsersCard() {
           <div style={{ fontSize: 11, color: C.dimmer, marginTop: 10 }}>
             Telegram ID: ask user to message <span style={{ color: C.blueLight }}>@userinfobot</span> — or they'll see it when they first message the bot.
           </div>
+
+          {/* Personalization — only for existing users */}
+          {editingId !== 'new' && (
+            <div style={{ marginTop: 16, padding: '14px 16px', background: C.card, borderRadius: 8, border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.blueLight, marginBottom: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Bot Personalization</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <div style={lbl}>Response Style</div>
+                  <select value={form.response_style || 'adaptive'} onChange={e => setForm(f => ({ ...f, response_style: e.target.value }))}
+                    style={{ ...inp, cursor: 'pointer' }}>
+                    <option value="adaptive">Adaptive (default)</option>
+                    <option value="brief">Brief (bullets only)</option>
+                    <option value="detailed">Detailed (full context)</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={lbl}>Morning Briefing</div>
+                  <select value={form.morning_briefing || 'none'} onChange={e => setForm(f => ({ ...f, morning_briefing: e.target.value }))}
+                    style={{ ...inp, cursor: 'pointer' }}>
+                    <option value="none">Off</option>
+                    <option value="weekdays">Weekdays (Mon–Fri)</option>
+                    <option value="daily">Daily</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div style={lbl}>Top Concerns <span style={{ color: C.dimmer, fontWeight: 400 }}>(bot will proactively surface these)</span></div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {CONCERN_OPTIONS.map(c => {
+                    const active = (form.top_concerns || []).includes(c.id);
+                    return (
+                      <button key={c.id} onClick={() => setForm(f => ({
+                        ...f,
+                        top_concerns: active
+                          ? (f.top_concerns || []).filter(x => x !== c.id)
+                          : [...(f.top_concerns || []), c.id],
+                      }))}
+                        style={{ background: active ? C.blue + '22' : 'transparent', border: `1px solid ${active ? C.blue : C.borderHi}`, color: active ? C.blueLight : C.dim, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: active ? 600 : 400, cursor: 'pointer', transition: 'all .15s' }}>
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
             <button onClick={() => { setEditingId(null); setForm({}); setSearch(''); setManualEmail(false); }} style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: C.dim, borderRadius: 6, padding: '6px 16px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
             <button onClick={save} disabled={saving} style={{ background: C.blue, color: C.white, border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
@@ -1443,6 +1573,9 @@ function Admin() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 30 }}>
+      {/* User Demands — Bot Unknown Queries */}
+      <UserDemandsCard />
+
       {/* AI Configuration Card */}
       <AIConfigCard />
 
