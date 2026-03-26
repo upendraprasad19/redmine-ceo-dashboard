@@ -32,7 +32,7 @@ export default async function handler(req, res) {
       sql`
         SELECT p.name,
           (SELECT COUNT(*) FROM issues WHERE project_id = p.id AND status NOT IN ('Closed','Resolved')) AS open_tickets
-        FROM projects p WHERE p.active = true ORDER BY open_tickets DESC LIMIT 5
+        FROM projects p WHERE p.status = 'active' ORDER BY open_tickets DESC LIMIT 5
       `,
     ]);
 
