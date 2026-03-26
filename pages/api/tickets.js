@@ -24,7 +24,7 @@ export default async function handler(req, res) {
             i.start_date,
             i.due_date,
             i.created_at,
-            (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved')) AS overdue,
+            (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) AS overdue,
             p.name  AS project_name,
             u1.name AS assigned_to,
             u1.team AS team,
@@ -65,9 +65,9 @@ export default async function handler(req, res) {
             LIMIT 1
           ) j ON true
           LEFT JOIN users uj ON uj.id = j.author_id
-          WHERE i.status NOT IN ('Closed', 'Resolved')
+          WHERE i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
             AND u1.team = ${team}
-          ORDER BY (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved')) DESC, i.due_date ASC NULLS LAST
+          ORDER BY (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) DESC, i.due_date ASC NULLS LAST
         `
       : await sql`
           SELECT
@@ -80,7 +80,7 @@ export default async function handler(req, res) {
             i.start_date,
             i.due_date,
             i.created_at,
-            (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved')) AS overdue,
+            (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) AS overdue,
             p.name  AS project_name,
             u1.name AS assigned_to,
             u1.team AS team,
@@ -121,8 +121,8 @@ export default async function handler(req, res) {
             LIMIT 1
           ) j ON true
           LEFT JOIN users uj ON uj.id = j.author_id
-          WHERE i.status NOT IN ('Closed', 'Resolved')
-          ORDER BY (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved')) DESC, i.due_date ASC NULLS LAST
+          WHERE i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
+          ORDER BY (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) DESC, i.due_date ASC NULLS LAST
         `;
 
     res.status(200).json({ tickets });

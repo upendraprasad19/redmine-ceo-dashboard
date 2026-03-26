@@ -62,7 +62,7 @@ async function buildWeeklyReport(team, periodDays = 7) {
       WHERE assigned_to_id = ANY(${memberIds})
         AND due_date IS NOT NULL
         AND due_date < CURRENT_DATE
-        AND status NOT IN ('Closed', 'Resolved')
+        AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
     `;
     const overdue = (overdueRows && overdueRows[0]) || { overdue_count: 0, overdue_list: null };
 

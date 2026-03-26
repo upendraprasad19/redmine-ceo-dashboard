@@ -30,7 +30,7 @@ export default async function handler(req, res) {
         SELECT i.id, i.title, i.status, i.priority, i.due_date
         FROM issues i
         WHERE i.assigned_to_id = ${personId}
-          AND i.status NOT IN ('Closed', 'Resolved')
+          AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
         ORDER BY i.due_date ASC NULLS LAST
         LIMIT 10
       `,
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
         WHERE assigned_to_id = ${personId}
           AND due_date IS NOT NULL
           AND due_date < CURRENT_DATE
-          AND status NOT IN ('Closed', 'Resolved')
+          AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
       `,
       sql`
         SELECT i.title, i.status, ij.notes, ij.created_at

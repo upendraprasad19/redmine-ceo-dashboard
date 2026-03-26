@@ -35,7 +35,7 @@ async function updateCapacityStatus() {
           SELECT COUNT(*)::int AS active_tickets
           FROM issues
           WHERE assigned_to_id = ${uid}
-            AND status NOT IN ('Closed', 'Resolved')
+            AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
         `;
         const activeTickets = (ticketRows && ticketRows[0] && ticketRows[0].active_tickets) || 0;
 
@@ -120,7 +120,7 @@ async function updateCapacityStatus() {
               SELECT redmine_id, title, priority
               FROM issues
               WHERE assigned_to_id IS NULL
-                AND status NOT IN ('Closed', 'Resolved')
+                AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
               ORDER BY
                 CASE priority
                   WHEN 'Immediate' THEN 1

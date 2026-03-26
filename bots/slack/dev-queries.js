@@ -127,7 +127,7 @@ async function handleOverdue(user, say) {
     WHERE i.assigned_to_id = ${user.redmineUserId}
       AND i.due_date IS NOT NULL
       AND i.due_date < CURRENT_DATE
-      AND i.status NOT IN ('Closed', 'Resolved')
+      AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
     ORDER BY i.due_date ASC
   `;
 
@@ -180,7 +180,7 @@ async function handleActiveTickets(user, say) {
       (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE) AS overdue
     FROM issues i
     WHERE i.assigned_to_id = ${user.redmineUserId}
-      AND i.status NOT IN ('Closed', 'Resolved')
+      AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
     ORDER BY
       (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE) DESC,
       i.due_date ASC NULLS LAST
@@ -442,13 +442,13 @@ async function handleFullStatus(user, say) {
     sql`
       SELECT COUNT(*) AS count FROM issues
       WHERE assigned_to_id = ${user.redmineUserId}
-        AND status NOT IN ('Closed', 'Resolved')
+        AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
     `,
     sql`
       SELECT COUNT(*) AS count FROM issues
       WHERE assigned_to_id = ${user.redmineUserId}
         AND due_date IS NOT NULL AND due_date < CURRENT_DATE
-        AND status NOT IN ('Closed', 'Resolved')
+        AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
     `,
     sql`
       SELECT COUNT(*) AS count FROM issues

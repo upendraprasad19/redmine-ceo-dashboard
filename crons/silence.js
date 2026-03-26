@@ -37,7 +37,7 @@ async function runSilenceDetector() {
         EXTRACT(DAY FROM NOW() - i.updated_at)::int AS days_silent
       FROM issues i
       LEFT JOIN users u ON u.id = i.assigned_to_id
-      WHERE i.status NOT IN ('Closed', 'Resolved')
+      WHERE i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
         AND i.updated_at < NOW() - INTERVAL '5 days'
         AND NOT EXISTS (
           SELECT 1 FROM issue_journals ij

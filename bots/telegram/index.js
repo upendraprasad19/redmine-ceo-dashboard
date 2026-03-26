@@ -125,13 +125,13 @@ bot.command('status', async (ctx) => {
         ? sql`
             SELECT COUNT(*) AS count FROM issues
             WHERE due_date IS NOT NULL AND due_date < CURRENT_DATE
-              AND status NOT IN ('Closed', 'Resolved')
+              AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
           `
         : sql`
             SELECT COUNT(*) AS count FROM issues i
             JOIN users u ON u.id = i.assigned_to_id
             WHERE i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE
-              AND i.status NOT IN ('Closed', 'Resolved')
+              AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
               AND u.team = ${user.team}
           `,
       isManager

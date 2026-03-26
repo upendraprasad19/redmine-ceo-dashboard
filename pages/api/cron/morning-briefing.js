@@ -79,8 +79,8 @@ async function buildBriefing(sql, user, profile) {
 
   const [overdueRes, missingRes, blockedRes, leaveRes] = await Promise.all([
     isManager
-      ? sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved')`
-      : sql`SELECT COUNT(*) AS count FROM issues i JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved') AND u.team = ${team}`,
+      ? sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved','Verified','Rejected')`
+      : sql`SELECT COUNT(*) AS count FROM issues i JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') AND u.team = ${team}`,
     isManager
       ? sql`SELECT COUNT(*) AS count FROM users WHERE active = true AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE)`
       : sql`SELECT COUNT(*) AS count FROM users WHERE active = true AND team = ${team} AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE)`,
@@ -111,8 +111,8 @@ async function buildBriefing(sql, user, profile) {
   // Concern-specific extra data
   if (concerns.includes('overdue_tickets') && overdue > 0) {
     const top = isManager
-      ? await sql`SELECT i.redmine_id, i.title, u.name AS assignee FROM issues i LEFT JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved') ORDER BY i.due_date ASC LIMIT 3`
-      : await sql`SELECT i.redmine_id, i.title, u.name AS assignee FROM issues i LEFT JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved') AND u.team = ${team} ORDER BY i.due_date ASC LIMIT 3`;
+      ? await sql`SELECT i.redmine_id, i.title, u.name AS assignee FROM issues i LEFT JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') ORDER BY i.due_date ASC LIMIT 3`
+      : await sql`SELECT i.redmine_id, i.title, u.name AS assignee FROM issues i LEFT JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') AND u.team = ${team} ORDER BY i.due_date ASC LIMIT 3`;
     if (top.length > 0) {
       lines.push(`\n🔴 *Top overdue:*`);
       for (const t of top) {

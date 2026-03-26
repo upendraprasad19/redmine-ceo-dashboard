@@ -27,7 +27,7 @@ export default async function handler(req, res) {
                WHERE u.team = ${team}
                AND i.due_date IS NOT NULL
                AND i.due_date < CURRENT_DATE
-               AND i.status NOT IN ('Closed', 'Resolved')) AS overdue_tickets,
+               AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) AS overdue_tickets,
               (SELECT COUNT(*) FROM daily_time_status dts
                JOIN users u ON u.id = dts.user_id
                WHERE u.team = ${team}
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
               (SELECT COUNT(*) FROM issues
                WHERE due_date IS NOT NULL
                AND due_date < CURRENT_DATE
-               AND status NOT IN ('Closed', 'Resolved')) AS overdue_tickets,
+               AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) AS overdue_tickets,
               (SELECT COUNT(*) FROM daily_time_status dts
                WHERE dts.logged_today = false AND dts.team IS NOT NULL) AS no_time_log,
               (SELECT COALESCE(SUM(hours), 0) FROM time_entries
@@ -77,10 +77,10 @@ export default async function handler(req, res) {
               COUNT(DISTINCT u.id) AS member_count,
               (SELECT COUNT(*) FROM issues i2
                JOIN users u2 ON u2.id = i2.assigned_to_id
-               WHERE u2.team = u.team AND i2.status NOT IN ('Closed','Resolved')) AS open_tickets,
+               WHERE u2.team = u.team AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')) AS open_tickets,
               ROUND(AVG(
                 (SELECT COUNT(*) FROM issues i3
-                 WHERE i3.assigned_to_id = u.id AND i3.status NOT IN ('Closed','Resolved'))
+                 WHERE i3.assigned_to_id = u.id AND i3.status NOT IN ('Closed','Resolved','Verified','Rejected'))
               )) AS avg_tickets_per_person
             FROM users u
             WHERE u.active = true AND u.team = ${team}
@@ -93,10 +93,10 @@ export default async function handler(req, res) {
               COUNT(DISTINCT u.id) AS member_count,
               (SELECT COUNT(*) FROM issues i2
                JOIN users u2 ON u2.id = i2.assigned_to_id
-               WHERE u2.team = u.team AND i2.status NOT IN ('Closed','Resolved')) AS open_tickets,
+               WHERE u2.team = u.team AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')) AS open_tickets,
               ROUND(AVG(
                 (SELECT COUNT(*) FROM issues i3
-                 WHERE i3.assigned_to_id = u.id AND i3.status NOT IN ('Closed','Resolved'))
+                 WHERE i3.assigned_to_id = u.id AND i3.status NOT IN ('Closed','Resolved','Verified','Rejected'))
               )) AS avg_tickets_per_person
             FROM users u
             WHERE u.active = true AND u.team IS NOT NULL
@@ -112,7 +112,7 @@ export default async function handler(req, res) {
             LEFT JOIN users u ON u.id = i.assigned_to_id
             WHERE i.due_date IS NOT NULL
             AND i.due_date < CURRENT_DATE
-            AND i.status NOT IN ('Closed', 'Resolved')
+            AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
             AND u.team = ${team}
             ORDER BY i.due_date ASC
             LIMIT 5
@@ -123,7 +123,7 @@ export default async function handler(req, res) {
             LEFT JOIN users u ON u.id = i.assigned_to_id
             WHERE i.due_date IS NOT NULL
             AND i.due_date < CURRENT_DATE
-            AND i.status NOT IN ('Closed', 'Resolved')
+            AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
             ORDER BY i.due_date ASC
             LIMIT 5
           `,
@@ -134,7 +134,7 @@ export default async function handler(req, res) {
       ? await sql`
           SELECT u.id, u.name, u.team,
             COALESCE((SELECT SUM(te.hours) FROM time_entries te WHERE te.user_id = u.id AND te.spent_on = CURRENT_DATE), 0) AS hours_today,
-            (SELECT COUNT(*) FROM issues i WHERE i.assigned_to_id = u.id AND i.status NOT IN ('Closed','Resolved')) AS open_tickets
+            (SELECT COUNT(*) FROM issues i WHERE i.assigned_to_id = u.id AND i.status NOT IN ('Closed','Resolved','Verified','Rejected')) AS open_tickets
           FROM users u
           WHERE u.active = true AND u.team = ${team}
           ORDER BY u.team, u.name
@@ -142,7 +142,7 @@ export default async function handler(req, res) {
       : await sql`
           SELECT u.id, u.name, u.team,
             COALESCE((SELECT SUM(te.hours) FROM time_entries te WHERE te.user_id = u.id AND te.spent_on = CURRENT_DATE), 0) AS hours_today,
-            (SELECT COUNT(*) FROM issues i WHERE i.assigned_to_id = u.id AND i.status NOT IN ('Closed','Resolved')) AS open_tickets
+            (SELECT COUNT(*) FROM issues i WHERE i.assigned_to_id = u.id AND i.status NOT IN ('Closed','Resolved','Verified','Rejected')) AS open_tickets
           FROM users u
           WHERE u.active = true AND u.team IS NOT NULL
           ORDER BY u.team, u.name

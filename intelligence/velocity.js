@@ -159,7 +159,7 @@ async function predictDeadlineMiss(projectId) {
       SELECT COUNT(*)::int AS remaining
       FROM issues
       WHERE project_id = ${projectId}
-        AND status NOT IN ('Closed', 'Resolved')
+        AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
     `;
     const remaining = (remainingRows && remainingRows[0] && remainingRows[0].remaining) || 0;
 

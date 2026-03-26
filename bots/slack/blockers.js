@@ -34,7 +34,7 @@ async function handleBlockerButton(body, client) {
     SELECT i.id, i.redmine_id, i.title, i.status
     FROM issues i
     WHERE i.assigned_to_id = ${resolved.redmineUserId}
-      AND i.status NOT IN ('Closed', 'Resolved')
+      AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
     ORDER BY i.due_date ASC NULLS LAST
     LIMIT 25
   `;
@@ -230,7 +230,7 @@ async function handleBlockerSubmission(body, view, client) {
     UPDATE issues
     SET status = 'Blocked', updated_at = NOW()
     WHERE id = ${ticketId}
-      AND status NOT IN ('Closed', 'Resolved')
+      AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
   `;
 
   // Log in slack_ticket_updates

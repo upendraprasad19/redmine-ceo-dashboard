@@ -55,7 +55,7 @@ async function generateInsightsForUser(userId) {
         WHERE assigned_to_id = ANY(${memberIds})
           AND due_date IS NOT NULL
           AND due_date < CURRENT_DATE
-          AND status NOT IN ('Closed', 'Resolved')
+          AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
       `;
       const od = (overdueRows && overdueRows[0]) || {};
       if (od.cnt > 0) {
@@ -147,7 +147,7 @@ async function generateInsightsForUser(userId) {
       const atRiskRows = await sql`
         SELECT
           p.id, p.name, p.deadline, p.progress_pct,
-          COUNT(i.id) FILTER (WHERE i.status NOT IN ('Closed', 'Resolved'))::int AS remaining,
+          COUNT(i.id) FILTER (WHERE i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected'))::int AS remaining,
           COUNT(i.id) FILTER (
             WHERE i.closed_at IS NOT NULL AND i.closed_at >= NOW() - INTERVAL '4 weeks'
           )::float / NULLIF(4, 0) AS velocity_per_week

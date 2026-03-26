@@ -50,7 +50,7 @@ async function runEscalationEngine() {
         LEFT JOIN users u ON u.id = i.assigned_to_id
         WHERE i.due_date IS NOT NULL
           AND i.due_date < CURRENT_DATE - INTERVAL '3 days'
-          AND i.status NOT IN ('Closed', 'Resolved')
+          AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
       `;
 
       if (overdueTickets && overdueTickets.length > 0) {

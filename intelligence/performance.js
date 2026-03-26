@@ -66,7 +66,7 @@ async function calculatePerformanceScores(period = 'daily') {
             COUNT(*) FILTER (WHERE i.status = 'In Progress')::int AS tickets_in_progress,
             COUNT(*) FILTER (
               WHERE i.due_date < NOW()
-              AND i.status NOT IN ('Closed', 'Resolved')
+              AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
             )::int AS tickets_overdue,
             COUNT(*) FILTER (WHERE i.status = 'Reopened' OR (i.status = 'In Progress' AND i.done_ratio < 100 AND i.closed_at IS NOT NULL))::int AS tickets_reopened,
             AVG(EXTRACT(EPOCH FROM (i.closed_at - i.created_at)) / 3600)

@@ -28,10 +28,10 @@ export default async function handler(req, res) {
         SELECT ROUND(COUNT(DISTINCT te.user_id) * 100.0 / NULLIF((SELECT COUNT(*) FROM users WHERE active = true), 0)) AS pct
         FROM time_entries te WHERE te.spent_on >= CURRENT_DATE - 7
       `,
-      sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved')`,
+      sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved','Verified','Rejected')`,
       sql`
         SELECT p.name,
-          (SELECT COUNT(*) FROM issues WHERE project_id = p.id AND status NOT IN ('Closed','Resolved')) AS open_tickets
+          (SELECT COUNT(*) FROM issues WHERE project_id = p.id AND status NOT IN ('Closed','Resolved','Verified','Rejected')) AS open_tickets
         FROM projects p WHERE p.status = 'active' ORDER BY open_tickets DESC LIMIT 5
       `,
     ]);

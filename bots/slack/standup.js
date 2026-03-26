@@ -202,7 +202,7 @@ async function sendStandup() {
           FROM issues i
           LEFT JOIN projects p ON p.id = i.project_id
           WHERE i.assigned_to_id = ${dev.linked_redmine_user_id}
-            AND i.status NOT IN ('Closed', 'Resolved')
+            AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
           ORDER BY
             (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE) DESC,
             i.priority = 'Urgent' DESC,

@@ -30,7 +30,7 @@ async function sendCEOBrief() {
         FROM issues
         WHERE due_date IS NOT NULL
           AND due_date < CURRENT_DATE
-          AND status NOT IN ('Closed', 'Resolved')
+          AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
       `,
       // Users missing time log today
       sql`
@@ -169,12 +169,12 @@ async function sendPMBriefs() {
               COUNT(*)::int AS count,
               ARRAY_AGG(
                 COALESCE(redmine_id::text, id::text) || ': ' || COALESCE(title, 'Untitled')
-              ) FILTER (WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed', 'Resolved')) AS list
+              ) FILTER (WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) AS list
             FROM issues
             WHERE assigned_to_id = ANY(${memberIds})
               AND due_date IS NOT NULL
               AND due_date < CURRENT_DATE
-              AND status NOT IN ('Closed', 'Resolved')
+              AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
           `,
           sql`
             SELECT ARRAY_AGG(u.name) AS names
