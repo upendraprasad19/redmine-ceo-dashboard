@@ -9,3 +9,5 @@ node_modules/
 *.pdf
 tmp/
 tmp-*.js
+
+.vercel

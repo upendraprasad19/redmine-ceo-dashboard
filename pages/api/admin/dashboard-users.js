@@ -15,16 +15,18 @@ export default async function handler(req, res) {
     // GET — list all dashboard users
     if (req.method === 'GET') {
       const users = await sql`
-        SELECT id, username, display_name, role, team, telegram_id, active, created_at
-        FROM dashboard_users
-        ORDER BY display_name ASC
+        SELECT du.id, du.username, du.display_name, du.role, du.team, du.telegram_id, du.active, du.created_at,
+               u.email, u.name AS redmine_name
+        FROM dashboard_users du
+        LEFT JOIN users u ON u.id = du.linked_redmine_user_id
+        ORDER BY du.display_name ASC
       `;
       return res.status(200).json({ users });
     }
 
     // POST — create new dashboard user
     if (req.method === 'POST') {
-      const { username, password, display_name, role, team, telegram_id } = req.body;
+      const { username, password, display_name, role, team, telegram_id, linked_redmine_user_id } = req.body;
 
       if (!username || !password || !display_name) {
         return res.status(400).json({ error: 'username, password, and display_name are required' });
@@ -41,8 +43,8 @@ export default async function handler(req, res) {
       const password_hash = await hashPassword(password);
 
       const result = await sql`
-        INSERT INTO dashboard_users (username, password_hash, display_name, role, team, telegram_id, active, created_at)
-        VALUES (${username}, ${password_hash}, ${display_name}, ${role || 'team_lead'}, ${team || null}, ${telegram_id || null}, true, NOW())
+        INSERT INTO dashboard_users (username, password_hash, display_name, role, team, telegram_id, linked_redmine_user_id, active, created_at)
+        VALUES (${username}, ${password_hash}, ${display_name}, ${role || 'team_lead'}, ${team || null}, ${telegram_id || null}, ${linked_redmine_user_id || null}, true, NOW())
         RETURNING id, username, display_name, role, team, telegram_id, active
       `;
 

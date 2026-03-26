@@ -987,11 +987,14 @@ function TelegramWebhookCard() {
 }
 
 function DashboardUsersCard() {
-  const [users, setUsers]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [editingId, setEditingId] = useState(null); // null | 'new' | number
-  const [form, setForm]         = useState({});
-  const [saving, setSaving]     = useState(false);
+  const [users, setUsers]           = useState([]);
+  const [redmineUsers, setRedmineUsers] = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [editingId, setEditingId]   = useState(null);
+  const [form, setForm]             = useState({});
+  const [saving, setSaving]         = useState(false);
+  const [manualEmail, setManualEmail] = useState(false);
+  const [search, setSearch]         = useState('');
 
   const ROLES = ['manager', 'team_lead'];
   const inp = { width: '100%', padding: '7px 10px', borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: C.white, fontSize: 12, outline: 'none', boxSizing: 'border-box' };
@@ -1000,21 +1003,47 @@ function DashboardUsersCard() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const res = await fetch('/api/admin/dashboard-users');
-    const d   = await res.json();
-    setUsers(d.users || []);
+    const [du, ru] = await Promise.all([
+      fetch('/api/admin/dashboard-users').then(r => r.json()),
+      fetch('/api/admin/users').then(r => r.json()),
+    ]);
+    setUsers(du.users || []);
+    setRedmineUsers(ru.users || []);
     setLoading(false);
   }
 
   function startEdit(u) {
     setEditingId(u.id);
     setForm({ display_name: u.display_name, role: u.role, team: u.team || '', telegram_id: u.telegram_id || '', active: u.active });
+    setManualEmail(false);
+    setSearch('');
   }
 
   function startNew() {
     setEditingId('new');
-    setForm({ username: '', password: '', display_name: '', role: 'team_lead', team: '', telegram_id: '' });
+    setForm({ username: '', password: '', display_name: '', role: 'team_lead', team: '', telegram_id: '', linked_redmine_user_id: null });
+    setManualEmail(false);
+    setSearch('');
   }
+
+  function selectRedmineUser(ru) {
+    setForm(f => ({
+      ...f,
+      display_name: ru.name,
+      team: ru.team || f.team,
+      linked_redmine_user_id: ru.id,
+      username: f.username || ru.name.split(' ')[0].toLowerCase(),
+    }));
+    setSearch(ru.name + (ru.email ? ` — ${ru.email}` : ''));
+  }
+
+  // Filtered redmine users for dropdown
+  const filteredRU = search.length > 1
+    ? redmineUsers.filter(u =>
+        u.name.toLowerCase().includes(search.toLowerCase()) ||
+        (u.email || '').toLowerCase().includes(search.toLowerCase())
+      ).slice(0, 8)
+    : [];
 
   async function save() {
     setSaving(true);
@@ -1023,7 +1052,7 @@ function DashboardUsersCard() {
         { alert('Username, password and display name are required'); setSaving(false); return; }
       const res = await fetch('/api/admin/dashboard-users', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, telegram_id: form.telegram_id ? Number(form.telegram_id) : null }),
+        body: JSON.stringify({ ...form, telegram_id: form.telegram_id ? Number(form.telegram_id) : null, linked_redmine_user_id: form.linked_redmine_user_id || null }),
       });
       const d = await res.json();
       if (!res.ok) { alert(d.error || 'Save failed'); setSaving(false); return; }
@@ -1061,11 +1090,9 @@ function DashboardUsersCard() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: editingId ? 16 : 0 }}>
         {users.map(u => (
           <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.bg, border: `1px solid ${u.active ? C.border : C.border + '60'}`, borderRadius: 8, opacity: u.active ? 1 : 0.5 }}>
-            {/* Avatar */}
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: roleColor(u.role) + '22', border: `1px solid ${roleColor(u.role)}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: roleColor(u.role), flexShrink: 0 }}>
               {(u.display_name || u.username).slice(0, 1).toUpperCase()}
             </div>
-            {/* Info */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{u.display_name}</span>
@@ -1073,15 +1100,13 @@ function DashboardUsersCard() {
                 <span style={{ fontSize: 10, fontWeight: 700, color: roleColor(u.role), background: roleColor(u.role) + '18', border: `1px solid ${roleColor(u.role)}40`, borderRadius: 4, padding: '1px 7px', textTransform: 'uppercase' }}>{u.role}</span>
                 {u.team && <span style={{ fontSize: 10, color: C.dim, background: C.card, borderRadius: 4, padding: '1px 7px' }}>{u.team}</span>}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 11, color: C.dimmer }}>
-                <span title="Telegram ID">
-                  {u.telegram_id
-                    ? <span style={{ color: '#29b6f6' }}>✈ {u.telegram_id}</span>
-                    : <span style={{ color: C.dimmer, fontStyle: 'italic' }}>no Telegram</span>}
-                </span>
+              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: C.dimmer }}>
+                {u.telegram_id
+                  ? <span style={{ color: '#29b6f6' }}>✈ {u.telegram_id}</span>
+                  : <span style={{ fontStyle: 'italic' }}>no Telegram</span>}
+                {u.email && <span style={{ color: C.dimmer }}>· {u.email}</span>}
               </div>
             </div>
-            {/* Actions */}
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
               <button onClick={() => startEdit(u)} style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: C.dim, borderRadius: 5, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>Edit</button>
               <button onClick={() => toggleActive(u)} style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: u.active ? '#ef4444' : '#22c55e', borderRadius: 5, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>
@@ -1098,11 +1123,58 @@ function DashboardUsersCard() {
           <div style={{ fontSize: 12, fontWeight: 600, color: C.white, marginBottom: 14 }}>
             {editingId === 'new' ? 'New Dashboard User' : `Edit — ${users.find(u => u.id === editingId)?.display_name}`}
           </div>
+
+          {/* Redmine user picker — only for new users */}
+          {editingId === 'new' && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={lbl}>Select from Redmine users <span style={{ color: C.dimmer, fontWeight: 400 }}>(auto-fills name & team)</span></div>
+              <div style={{ position: 'relative' }}>
+                <input
+                  value={search}
+                  onChange={e => { setSearch(e.target.value); setManualEmail(false); }}
+                  placeholder="Type name or email to search… or leave blank to enter manually"
+                  style={{ ...inp, paddingRight: 90 }}
+                />
+                {search && (
+                  <button onClick={() => { setSearch(''); setForm(f => ({ ...f, display_name: '', email: '', team: '' })); }}
+                    style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: C.dimmer, cursor: 'pointer', fontSize: 11 }}>
+                    Clear
+                  </button>
+                )}
+                {filteredRU.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.card, border: `1px solid ${C.borderHi}`, borderRadius: 6, zIndex: 50, maxHeight: 200, overflowY: 'auto', marginTop: 2 }}>
+                    {filteredRU.map(ru => (
+                      <div key={ru.id} onClick={() => selectRedmineUser(ru)}
+                        style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12, borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                        onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <span style={{ color: C.white }}>{ru.name}</span>
+                        <span style={{ color: C.dimmer, fontSize: 11 }}>{ru.email || 'no email'} {ru.team ? `· ${ru.team}` : ''}</span>
+                      </div>
+                    ))}
+                    <div onClick={() => { setManualEmail(true); setSearch(''); }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12, color: C.blueLight }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      + Not in list — add email manually
+                    </div>
+                  </div>
+                )}
+              </div>
+              {manualEmail && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={lbl}>Email <span style={{ color: C.dimmer, fontWeight: 400 }}>(not in Redmine)</span></div>
+                  <input value={form.email || ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="user@company.com" style={inp} />
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {editingId === 'new' && <>
               <div>
                 <div style={lbl}>Username</div>
-                <input value={form.username || ''} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="vivek" style={inp} />
+                <input value={form.username || ''} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="deepak" style={inp} />
               </div>
               <div>
                 <div style={lbl}>Password</div>
@@ -1111,7 +1183,7 @@ function DashboardUsersCard() {
             </>}
             <div>
               <div style={lbl}>Display Name</div>
-              <input value={form.display_name || ''} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} placeholder="Vivek Kumar" style={inp} />
+              <input value={form.display_name || ''} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} placeholder="Deepak Sharma" style={inp} />
             </div>
             <div>
               <div style={lbl}>Role</div>
@@ -1128,11 +1200,12 @@ function DashboardUsersCard() {
               <input value={form.telegram_id || ''} onChange={e => setForm(f => ({ ...f, telegram_id: e.target.value }))} placeholder="e.g. 8600897389" style={inp} />
             </div>
           </div>
+
           <div style={{ fontSize: 11, color: C.dimmer, marginTop: 10 }}>
-            To get a Telegram ID: ask the user to message <span style={{ color: C.blueLight }}>@userinfobot</span> on Telegram — it replies with their numeric ID.
+            Telegram ID: ask user to message <span style={{ color: C.blueLight }}>@userinfobot</span> — or they'll see it when they first message the bot.
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
-            <button onClick={() => { setEditingId(null); setForm({}); }} style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: C.dim, borderRadius: 6, padding: '6px 16px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => { setEditingId(null); setForm({}); setSearch(''); setManualEmail(false); }} style={{ background: 'none', border: `1px solid ${C.borderHi}`, color: C.dim, borderRadius: 6, padding: '6px 16px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
             <button onClick={save} disabled={saving} style={{ background: C.blue, color: C.white, border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
               {saving ? 'Saving…' : editingId === 'new' ? 'Create User' : 'Save Changes'}
             </button>

@@ -44,6 +44,14 @@ async function seed() {
       team: 'QA',
       telegram_id: 8600897389,
     },
+    {
+      username: 'deepak',
+      password: '123456',
+      display_name: 'Deepak',
+      role: 'team_lead',
+      team: 'DB',
+      telegram_id: null,
+    },
   ];
 
   for (const u of users) {

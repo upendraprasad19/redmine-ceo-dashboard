@@ -32,8 +32,9 @@ bot.use(async (ctx, next) => {
 
     if (users.length === 0) {
       return ctx.reply(
-        '❌ You are not registered in the Company OS dashboard.\n' +
-        'Please contact your admin to link your Telegram account.'
+        `❌ You are not registered in the Company OS dashboard.\n\n` +
+        `Share this with your admin to get access:\n` +
+        `Your Telegram ID: \`${telegramId}\``
       );
     }
 

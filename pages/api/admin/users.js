@@ -6,9 +6,9 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const users = await sql`
-        SELECT id, name, team, role, is_team_lead, active 
-        FROM users 
-        WHERE active = true 
+        SELECT id, name, email, team, role, is_team_lead, active
+        FROM users
+        WHERE active = true
         ORDER BY team NULLS LAST, name
       `;
       return res.status(200).json({ users });
