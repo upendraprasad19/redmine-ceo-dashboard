@@ -1,9 +1,13 @@
 import { getDb } from '../../../lib/db';
+import { requireAdmin } from '../../../lib/admin';
 
 export default async function handler(req, res) {
   const sql = getDb();
 
   try {
+    const user = await requireAdmin(req, res);
+    if (!user) return;
+
     if (req.method === 'GET') {
       const records = await sql`
         SELECT lr.id, lr.user_id, lr.leave_type, lr.start_date, lr.end_date, lr.notes, lr.source, u.name as user_name

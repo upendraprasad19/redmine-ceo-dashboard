@@ -1,6 +1,8 @@
 const { getCurrentUser } = require('../../lib/auth');
 const { getDb } = require('../../lib/db');
 
+const EXPECTED_TIME_TEAMS = ['AI','DB','DevOps','JS/UI','Java','QA'];
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
@@ -20,7 +22,9 @@ export default async function handler(req, res) {
             COALESCE((SELECT SUM(te.hours) FROM time_entries te WHERE te.user_id = u.id AND te.spent_on = CURRENT_DATE), 0) AS today_hours,
             COALESCE((SELECT SUM(te.hours) FROM time_entries te WHERE te.user_id = u.id AND te.spent_on = CURRENT_DATE - 1), 0) AS yesterday_hours
           FROM users u
-          WHERE u.active = true AND u.team = ${team}
+          WHERE u.active = true
+            AND u.team = ${team}
+            AND u.team = ANY(${EXPECTED_TIME_TEAMS}::text[])
           ORDER BY u.team, u.name
         `
       : await sql`
@@ -28,7 +32,8 @@ export default async function handler(req, res) {
             COALESCE((SELECT SUM(te.hours) FROM time_entries te WHERE te.user_id = u.id AND te.spent_on = CURRENT_DATE), 0) AS today_hours,
             COALESCE((SELECT SUM(te.hours) FROM time_entries te WHERE te.user_id = u.id AND te.spent_on = CURRENT_DATE - 1), 0) AS yesterday_hours
           FROM users u
-          WHERE u.active = true AND u.team IS NOT NULL
+          WHERE u.active = true
+            AND u.team = ANY(${EXPECTED_TIME_TEAMS}::text[])
           ORDER BY u.team, u.name
         `;
 

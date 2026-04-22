@@ -1,6 +1,8 @@
 import { getDb } from '../../lib/db';
 const { getCurrentUser } = require('../../lib/auth');
 
+const APPROVED_REDMINE_IDS = [2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76];
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
@@ -16,6 +18,7 @@ export default async function handler(req, res) {
       ? await sql`
           SELECT
             i.id,
+            i.redmine_id,
             'TK-' || i.redmine_id AS ticket_id,
             i.title,
             i.bz_id,
@@ -24,13 +27,14 @@ export default async function handler(req, res) {
             i.start_date,
             i.due_date,
             i.created_at,
+            i.updated_at,
             (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) AS overdue,
             p.name  AS project_name,
             u1.name AS assigned_to,
             u1.team AS team,
             u1.role AS role,
             u2.name AS assigned_by,
-            pm.name AS manager,
+            do_.names AS manager,
             th.db_assignee,
             th.java_assignee,
             th.js_assignee,
@@ -39,12 +43,17 @@ export default async function handler(req, res) {
             th.devops_assignee,
             j.notes AS last_comment,
             uj.name AS comment_by,
-            j.created_at AS last_update
+            j.created_at AS last_update,
+            c.contributors
           FROM issues i
           LEFT JOIN projects p    ON p.id = i.project_id
-          LEFT JOIN users pm      ON pm.id = p.manager_id
           LEFT JOIN users u1      ON u1.id = i.assigned_to_id
           LEFT JOIN users u2      ON u2.id = i.author_id
+          LEFT JOIN LATERAL (
+            SELECT STRING_AGG(u.name, ', ' ORDER BY u.name) AS names
+            FROM unnest(COALESCE(i.delivery_owner_ids, ARRAY[]::int[])) AS oid
+            JOIN users u ON u.id = oid
+          ) do_ ON true
           LEFT JOIN LATERAL (
             SELECT
               MAX(CASE WHEN h.team_name = 'DB' THEN uh.name END) AS db_assignee,
@@ -65,13 +74,21 @@ export default async function handler(req, res) {
             LIMIT 1
           ) j ON true
           LEFT JOIN users uj ON uj.id = j.author_id
+          LEFT JOIN LATERAL (
+            SELECT STRING_AGG(DISTINCT uc.name, ', ' ORDER BY uc.name) AS contributors
+            FROM time_entries te
+            JOIN users uc ON uc.id = te.user_id
+            WHERE te.issue_id = i.id
+          ) c ON true
           WHERE i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
+            AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[])
             AND u1.team = ${team}
           ORDER BY (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) DESC, i.due_date ASC NULLS LAST
         `
       : await sql`
           SELECT
             i.id,
+            i.redmine_id,
             'TK-' || i.redmine_id AS ticket_id,
             i.title,
             i.bz_id,
@@ -80,13 +97,14 @@ export default async function handler(req, res) {
             i.start_date,
             i.due_date,
             i.created_at,
+            i.updated_at,
             (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) AS overdue,
             p.name  AS project_name,
             u1.name AS assigned_to,
             u1.team AS team,
             u1.role AS role,
             u2.name AS assigned_by,
-            pm.name AS manager,
+            do_.names AS manager,
             th.db_assignee,
             th.java_assignee,
             th.js_assignee,
@@ -95,12 +113,17 @@ export default async function handler(req, res) {
             th.devops_assignee,
             j.notes AS last_comment,
             uj.name AS comment_by,
-            j.created_at AS last_update
+            j.created_at AS last_update,
+            c.contributors
           FROM issues i
           LEFT JOIN projects p    ON p.id = i.project_id
-          LEFT JOIN users pm      ON pm.id = p.manager_id
           LEFT JOIN users u1      ON u1.id = i.assigned_to_id
           LEFT JOIN users u2      ON u2.id = i.author_id
+          LEFT JOIN LATERAL (
+            SELECT STRING_AGG(u.name, ', ' ORDER BY u.name) AS names
+            FROM unnest(COALESCE(i.delivery_owner_ids, ARRAY[]::int[])) AS oid
+            JOIN users u ON u.id = oid
+          ) do_ ON true
           LEFT JOIN LATERAL (
             SELECT
               MAX(CASE WHEN h.team_name = 'DB' THEN uh.name END) AS db_assignee,
@@ -121,7 +144,14 @@ export default async function handler(req, res) {
             LIMIT 1
           ) j ON true
           LEFT JOIN users uj ON uj.id = j.author_id
+          LEFT JOIN LATERAL (
+            SELECT STRING_AGG(DISTINCT uc.name, ', ' ORDER BY uc.name) AS contributors
+            FROM time_entries te
+            JOIN users uc ON uc.id = te.user_id
+            WHERE te.issue_id = i.id
+          ) c ON true
           WHERE i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
+            AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[])
           ORDER BY (i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) DESC, i.due_date ASC NULLS LAST
         `;
 

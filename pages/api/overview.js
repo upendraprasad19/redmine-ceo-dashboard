@@ -1,6 +1,8 @@
 import { getDb } from '../../lib/db';
 const { getCurrentUser } = require('../../lib/auth');
 
+const EXPECTED_TIME_TEAMS = ['AI','DB','DevOps','JS/UI','Java','QA'];
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
@@ -31,6 +33,7 @@ export default async function handler(req, res) {
               (SELECT COUNT(*) FROM daily_time_status dts
                JOIN users u ON u.id = dts.user_id
                WHERE u.team = ${team}
+               AND u.team = ANY(${EXPECTED_TIME_TEAMS}::text[])
                AND dts.logged_today = false) AS no_time_log,
               (SELECT COALESCE(SUM(te.hours), 0) FROM time_entries te
                JOIN users u ON u.id = te.user_id
@@ -47,7 +50,8 @@ export default async function handler(req, res) {
                AND due_date < CURRENT_DATE
                AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')) AS overdue_tickets,
               (SELECT COUNT(*) FROM daily_time_status dts
-               WHERE dts.logged_today = false AND dts.team IS NOT NULL) AS no_time_log,
+               WHERE dts.logged_today = false
+               AND dts.team = ANY(${EXPECTED_TIME_TEAMS}::text[])) AS no_time_log,
               (SELECT COALESCE(SUM(hours), 0) FROM time_entries
                WHERE spent_on = CURRENT_DATE - 1) AS yesterday_hours
           `,

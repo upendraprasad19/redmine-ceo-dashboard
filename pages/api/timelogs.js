@@ -1,6 +1,8 @@
 import { getDb } from '../../lib/db';
 const { getCurrentUser } = require('../../lib/auth');
 
+const EXPECTED_TIME_TEAMS = ['AI','DB','DevOps','JS/UI','Java','QA'];
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
@@ -30,7 +32,9 @@ export default async function handler(req, res) {
             (${range} = 'yearly' AND te.spent_on >= date_trunc('year', CURRENT_DATE)) OR
             (${range} = 'custom' AND te.spent_on BETWEEN ${from}::date AND ${to}::date)
           )
-          WHERE u.active = true AND u.team = ${team}
+          WHERE u.active = true
+            AND u.team = ${team}
+            AND u.team = ANY(${EXPECTED_TIME_TEAMS}::text[])
           GROUP BY u.id, u.name, u.team, u.initials
           ORDER BY u.team, u.name
         `
@@ -50,6 +54,7 @@ export default async function handler(req, res) {
             (${range} = 'custom' AND te.spent_on BETWEEN ${from}::date AND ${to}::date)
           )
           WHERE u.active = true
+            AND u.team = ANY(${EXPECTED_TIME_TEAMS}::text[])
           GROUP BY u.id, u.name, u.team, u.initials
           ORDER BY u.team, u.name
         `;

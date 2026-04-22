@@ -378,7 +378,7 @@ function NoTimeLogModal({ onClose }) {
   );
 }
 
-function WorkloadByTeam({ workload=[], memberHours=[] }) {
+function WorkloadByTeam({ workload=[], memberHours=[], compact=false }) {
   const [openTeams, setOpenTeams] = useState({});
   const toggleTeam = (t) => setOpenTeams(prev => ({ ...prev, [t]: !prev[t] }));
 
@@ -393,6 +393,33 @@ function WorkloadByTeam({ workload=[], memberHours=[] }) {
   // Max hours for bar scaling
   const allHours = memberHours.map(m => parseFloat(m.hours_today || 0)).filter(h => h > 0);
   const maxHours = allHours.length > 0 ? Math.max(...allHours) : 8;
+
+  if (compact) {
+    return (
+      <Card style={{ flex:1, minWidth:0, padding:"16px 18px" }}>
+        <Label size={11}>Workload by Team</Label>
+        <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:12 }}>
+          {workload.length === 0 && <div style={{ color:C.dimmer, fontSize:13 }}>No team data</div>}
+          {workload.map((w) => {
+            const members = membersByTeam[w.team] || [];
+            const teamHoursTotal = members.reduce((s, m) => s + m.hours, 0);
+            return (
+              <div key={w.team} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"6px 0" }}>
+                <div style={{ display:"flex", flexDirection:"column", minWidth:0, flex:1 }}>
+                  <span style={{ fontSize:12, fontWeight:600, color:C.white, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{w.team}</span>
+                  <span style={{ fontSize:10, color:C.dimmer }}>{w.member_count} members</span>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2 }}>
+                  <span style={{ fontSize:12, color:C.green, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:600 }}>{teamHoursTotal.toFixed(1)}h today</span>
+                  <span style={{ fontSize:10, color:C.dim }}>avg {w.avg_tickets_per_person} tickets</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card style={{ padding:0, overflow:"hidden" }}>
@@ -454,21 +481,33 @@ function WorkloadByTeam({ workload=[], memberHours=[] }) {
   );
 }
 
+function ExecSnapshotBlock({ title, rows=[] }) {
+  return (
+    <Card style={{ flex:1, minWidth:0, padding:"16px 18px" }}>
+      <Label size={11}>{title}</Label>
+      {rows.length === 0
+        ? <div style={{ color:C.dimmer, fontSize:12, paddingTop:8 }}>No data</div>
+        : <div style={{ display:"flex", flexDirection:"column", gap:4, marginTop:8 }}>
+            {rows.map((r,i) => (
+              <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:i<rows.length-1?`1px solid ${C.border}`:"none" }}>
+                <span style={{ fontSize:12, color:C.white, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{r.name || '—'}</span>
+                <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:18, fontWeight:700, color:C.blueLight, flexShrink:0, marginLeft:12 }}>{r.count}</span>
+              </div>
+            ))}
+          </div>
+      }
+    </Card>
+  );
+}
+
 function Overview({ overview={}, people=[], tickets=[], timeLogs=[], currentUser=null }) {
-  const { kpis={}, projects=[], workload=[] } = overview;
-  const DEFAULT_PROJS = ["icast", "iclaims", "reports", "liability", "ilpus"];
-  const [selectedProjs, setSelectedProjs] = useState([]);
-  const [showNoTimeLog, setShowNoTimeLog] = useState(false);
+  const { kpis={}, workload=[] } = overview;
 
-  // Set defaults on mount
+  const [execSnapshot, setExecSnapshot] = useState(null);
   useEffect(() => {
-    if (projects.length > 0 && selectedProjs.length === 0) {
-      const init = projects.filter(p => DEFAULT_PROJS.some(dp => p.name.toLowerCase().includes(dp))).map(p=>p.name);
-      if(init.length) setSelectedProjs(init);
-    }
-  }, [projects]);
-
-  const displayProjects = projects.filter(p => selectedProjs.includes(p.name));
+    fetch('/api/pm-pulse/executive-snapshot').then(r => r.json()).then(setExecSnapshot).catch(() => {});
+  }, []);
+  const [showNoTimeLog, setShowNoTimeLog] = useState(false);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:24, animation:"fadeIn .4s ease" }}>
@@ -515,54 +554,15 @@ function Overview({ overview={}, people=[], tickets=[], timeLogs=[], currentUser
       </div>
       {showNoTimeLog && <NoTimeLogModal onClose={()=>setShowNoTimeLog(false)}/>}
 
-      <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:16 }}>
-        {/* Project Deadlines */}
-        <Card style={{ padding:0, overflow:"hidden" }}>
-          <div style={{ padding:"12px 22px 10px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <Label size={11}>Project Deadlines</Label>
-            <select 
-              value="" 
-              onChange={e => {
-                const val = e.target.value;
-                if(val && !selectedProjs.includes(val)) setSelectedProjs([...selectedProjs, val]);
-              }} 
-              style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.dim, borderRadius: 6, padding: "4px 8px", fontSize: 11, outline:"none", cursor:"pointer" }}
-            >
-              <option value="" disabled>+ Add Project</option>
-              {projects.filter(p => !selectedProjs.includes(p.name)).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-            </select>
-          </div>
-          <Divider/>
-          <div style={{ padding:"8px 0" }}>
-            {displayProjects.length === 0 && <div style={{ padding:20, color:C.dimmer, fontSize:13 }}>No projects pinned. Add one from the dropdown above.</div>}
-            {displayProjects.map((p,i)=>(
-              <div key={p.name}>
-                <div style={{ padding:"14px 22px" }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                    <span style={{ fontSize:13, fontWeight:600, color:C.white, display:"flex", alignItems:"center", gap: 8 }}>
-                      {p.name}
-                      <button onClick={() => setSelectedProjs(selectedProjs.filter(sp => sp !== p.name))} style={{ background:"none", border:"none", color:C.amber, cursor:"pointer", fontSize: 16, lineHeight: 1 }}>&times;</button>
-                    </span>
-                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <Dot color={riskColor(p.risk)}/><span style={{ fontSize:11, color:C.dimmer }}>{p.deadline ? new Date(p.deadline).toLocaleDateString() : 'No date'}</span>
-                      <div style={{ background:riskColor(p.risk)+"20", border:`1px solid ${riskColor(p.risk)}44`, borderRadius:4, padding:"2px 8px" }}>
-                        <span style={{ fontSize:10, color:riskColor(p.risk), fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>{p.risk}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <Bar pct={p.progress_pct || 0} color={riskColor(p.risk)} h={5}/>
-                    <span style={{ fontSize:11, color:C.dimmer, flexShrink:0, width:36, textAlign:"right" }}>{p.progress_pct || 0}%</span>
-                  </div>
-                </div>
-                {i<displayProjects.length-1 && <Divider/>}
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Workload by Team */}
-        <WorkloadByTeam workload={workload} memberHours={overview.memberHours || []}/>
+      {/* ── EXECUTIVE SNAPSHOT + WORKLOAD (4-col) ── */}
+      <div>
+        <div style={{ fontSize:11, letterSpacing:"0.12em", color:C.dimmer, textTransform:"uppercase", fontWeight:600, marginBottom:14 }}>Executive Snapshot — Active Tickets</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:16 }}>
+          <ExecSnapshotBlock title="By Manager" rows={execSnapshot?.managers||[]}/>
+          <ExecSnapshotBlock title="By Project" rows={execSnapshot?.projects||[]}/>
+          <ExecSnapshotBlock title="By Developer" rows={execSnapshot?.developers||[]}/>
+          <WorkloadByTeam workload={workload} memberHours={overview.memberHours || []} compact/>
+        </div>
       </div>
 
       {/* ── TEAM HEALTH BADGES ── */}
@@ -698,93 +698,200 @@ function TimeLogs({ timeLogs=[] }) {
 }
 
 
+const BUCKETS = ["All", "iCLAIMS 2.0", "Reports 3.0", "Maya Virtual Agent & Sub", "Miscellaneous"];
+
+function getProjectBucket(projectName) {
+  const MAYA = ['Maya Virtual Assistant','Claim Info Bot','Maya Agents','Maya Audits / Assistance','Maya Charts','Maya Docs','Maya Insights','Maya Predictions','Maya Voice','Producer App','Support Bot'];
+  if (projectName === 'iCLAIMS 2.0') return 'iCLAIMS 2.0';
+  if (projectName === 'Reports 3.0') return 'Reports 3.0';
+  if (MAYA.includes(projectName)) return 'Maya Virtual Agent & Sub';
+  return 'Miscellaneous';
+}
+
+function AnomalySection({ title, rows=[], columns=[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border:`1px solid ${C.border}`, borderRadius:12, overflow:"hidden" }}>
+      <div onClick={() => setOpen(o=>!o)} style={{ display:"flex", alignItems:"center", gap:12, padding:"13px 20px", background:C.card, cursor:"pointer" }}
+        onMouseEnter={e=>e.currentTarget.style.background="#0c1a2e"}
+        onMouseLeave={e=>e.currentTarget.style.background=C.card}>
+        <Chevron open={open}/>
+        <span style={{ fontSize:13, fontWeight:600, color:C.white }}>{title}</span>
+        <span style={{ marginLeft:"auto", background:rows.length?C.amber+"22":C.border, border:`1px solid ${rows.length?C.amber+"55":C.border}`, borderRadius:20, padding:"2px 10px", fontSize:11, color:rows.length?C.amber:C.dimmer, fontWeight:600 }}>{rows.length}</span>
+      </div>
+      {open && (
+        <div style={{ padding:"0 0 8px" }}>
+          {rows.length === 0
+            ? <div style={{ padding:"16px 20px", color:C.dimmer, fontSize:12 }}>No issues found.</div>
+            : (
+              <div style={{ overflowX:"auto" }}>
+                <div style={{ minWidth:900, padding:"0 10px" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:columns.map(()=>"1fr").join(" "), gap:10, padding:"8px 10px", marginBottom:2 }}>
+                    {columns.map(c=><div key={c} style={{ fontSize:9, color:C.dimmer, letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:600 }}>{c}</div>)}
+                  </div>
+                  {rows.map((r,i)=>(
+                    <div key={i} style={{ display:"grid", gridTemplateColumns:columns.map(()=>"1fr").join(" "), gap:10, padding:"10px 10px", borderRadius:8, borderBottom:i<rows.length-1?`1px solid ${C.border}`:"none", alignItems:"center" }}
+                      onMouseEnter={e=>e.currentTarget.style.background="#0c1a2e"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      {r}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Tickets({ tickets=[], onSelectTicket }) {
-  const [projFilter, setProjFilter] = useState("");
-  const projectsList = [...new Set(tickets.map(t=>t.project_name||'No Project'))].sort();
-  
-  const filteredTix = projFilter ? tickets.filter(t=>(t.project_name||'No Project')===projFilter) : tickets;
+  const [bucket, setBucket] = useState("All");
+  const [anomalies, setAnomalies] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/pm-pulse/anomalies').then(r => r.json()).then(setAnomalies).catch(() => {});
+  }, []);
+
+  const filteredTix = bucket === "All"
+    ? tickets
+    : tickets.filter(t => getProjectBucket(t.project_name || '') === bucket);
+
   const projectGroups = groupBy(filteredTix, "project_name");
-  
   const overdueCount = filteredTix.filter(t => t.overdue).length;
   const blockedCount = filteredTix.filter(t => t.status === "Blocked").length;
   const reviewCount  = filteredTix.filter(t => t.status === "Review" || t.status === "In Review").length;
 
-  const gridCol = "80px 60px 1.5fr 80px 100px 110px 80px 60px 60px 60px 60px 60px 70px 90px";
-  const headers = ["ID", "BZ ID", "Title", "Created", "Author", "Assigned", "When", "DB", "Java", "JS/UI", "QA", "AI", "DevOps", "Mgr"];
+  // AppScript column layout (projectSheetHeaders — exact labels)
+  const gridCol = "80px 70px 1.8fr 90px 95px 95px 95px 90px 1fr 100px";
+  const headers = ["Redmine No", "BZ Id", "Brief description", "Status", "Created date", "Last update date", "Assigned to", "Due Date", "Team members who worked on it", "Manager"];
 
   function fmtDate(d) {
-    if (!d) return '-';
-    return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' });
+  }
+  function renderName(name) {
+    if (!name) return '—';
+    const parts = name.split(' ');
+    return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length-1][0]}.`;
   }
 
-  function renderName(name) {
-    if (!name) return '-';
-    const parts = name.split(' ');
-    if (parts.length === 1) return parts[0];
-    return `${parts[0]} ${parts[parts.length-1][0]}.`;
+  const anomCols = {
+    reopen:            ["Project", "Redmine #", "Brief Description", "Assigned To", "Last Updated", "Manager"],
+    stale:             ["Project", "Redmine #", "Brief Description", "Status", "Assigned To", "Last Updated", "Days Since Update", "Manager"],
+    workedNotAssigned: ["Project", "Redmine #", "Brief Description", "Assigned To", "Worked By", "Hours Logged", "Last Log Date", "Manager"],
+    assignedNoTime:    ["Project", "Redmine #", "Brief Description", "Status", "Assigned To", "Due Date", "Last Updated", "Manager"],
+  };
+
+  function anomRow_reopen(r) {
+    return [
+      <span style={{fontSize:12,color:C.dim}}>{r.project_name||'—'}</span>,
+      <a href={`http://redmine.redmind.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
+      <span style={{fontSize:12,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</span>,
+      <span style={{fontSize:12,color:C.white}}>{renderName(r.assigned_to)}</span>,
+      <span style={{fontSize:11,color:C.dim}}>{fmtDate(r.updated_at)}</span>,
+      <span style={{fontSize:12,color:C.green}}>{renderName(r.manager)}</span>,
+    ];
+  }
+  function anomRow_stale(r) {
+    return [
+      <span style={{fontSize:12,color:C.dim}}>{r.project_name||'—'}</span>,
+      <a href={`http://redmine.redmind.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
+      <span style={{fontSize:12,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</span>,
+      <StatusPill status={r.status}/>,
+      <span style={{fontSize:12,color:C.white}}>{renderName(r.assigned_to)}</span>,
+      <span style={{fontSize:11,color:C.dim}}>{fmtDate(r.updated_at)}</span>,
+      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:700,color:C.red}}>{r.days_since_update}</span>,
+      <span style={{fontSize:12,color:C.green}}>{renderName(r.manager)}</span>,
+    ];
+  }
+  function anomRow_worked(r) {
+    return [
+      <span style={{fontSize:12,color:C.dim}}>{r.project_name||'—'}</span>,
+      <a href={`http://redmine.redmind.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
+      <span style={{fontSize:12,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</span>,
+      <span style={{fontSize:12,color:C.dim}}>{renderName(r.assigned_to)}</span>,
+      <span style={{fontSize:12,color:C.amber,fontWeight:600}}>{renderName(r.worked_by)}</span>,
+      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:700,color:C.blueLight}}>{(r.hours_logged||0).toFixed(1)}h</span>,
+      <span style={{fontSize:11,color:C.dim}}>{fmtDate(r.last_log_date)}</span>,
+      <span style={{fontSize:12,color:C.green}}>{renderName(r.manager)}</span>,
+    ];
+  }
+  function anomRow_notime(r) {
+    return [
+      <span style={{fontSize:12,color:C.dim}}>{r.project_name||'—'}</span>,
+      <a href={`http://redmine.redmind.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
+      <span style={{fontSize:12,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</span>,
+      <StatusPill status={r.status}/>,
+      <span style={{fontSize:12,color:C.white}}>{renderName(r.assigned_to)}</span>,
+      <span style={{fontSize:11,color:r.due_date&&new Date(r.due_date)<new Date()?C.red:C.dim}}>{fmtDate(r.due_date)}</span>,
+      <span style={{fontSize:11,color:C.dim}}>{fmtDate(r.updated_at)}</span>,
+      <span style={{fontSize:12,color:C.green}}>{renderName(r.manager)}</span>,
+    ];
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, flex: 1, maxWidth: 800 }}>
-          {[
-            { label: "Open", val: filteredTix.length, color: C.white },
-            { label: "Overdue", val: overdueCount, color: overdueCount ? C.red : C.green },
-            { label: "Blocked", val: blockedCount, color: C.amber },
-            { label: "Review", val: reviewCount, color: C.blueLight }
-          ].map(k => (
-            <Card key={k.label}><Label>{k.label}</Label><BigNum value={k.val} color={k.color} /></Card>
-          ))}
-        </div>
-        <select value={projFilter} onChange={e=>setProjFilter(e.target.value)} style={{ padding: "10px 16px", borderRadius: 8, background: C.card, color: C.white, border: `1px solid ${C.borderHi}`, outline: "none", cursor: "pointer", fontWeight: 600 }}>
-          <option value="">All Projects</option>
-          {projectsList.map(p=><option key={p} value={p}>{p}</option>)}
-        </select>
+      {/* KPI cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, maxWidth: 800 }}>
+        {[
+          { label: "Open", val: filteredTix.length, color: C.white },
+          { label: "Overdue", val: overdueCount, color: overdueCount ? C.red : C.green },
+          { label: "Blocked", val: blockedCount, color: C.amber },
+          { label: "Review", val: reviewCount, color: C.blueLight }
+        ].map(k => (
+          <Card key={k.label}><Label>{k.label}</Label><BigNum value={k.val} color={k.color} /></Card>
+        ))}
       </div>
-      
+
+      {/* Bucket filter pills */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+        {BUCKETS.map(b => (
+          <button key={b} onClick={()=>setBucket(b)} style={{ background:bucket===b?C.blue:"transparent", border:`1px solid ${bucket===b?C.blue:C.border}`, color:bucket===b?C.white:C.dim, borderRadius:20, padding:"6px 16px", fontSize:11, fontWeight:600, cursor:"pointer", transition:"all .15s", letterSpacing:"0.04em" }}>
+            {b === "All" ? `All (${tickets.length})` : `${b} (${tickets.filter(t=>getProjectBucket(t.project_name||'')===b).length})`}
+          </button>
+        ))}
+      </div>
+
+      {/* Project accordions with AppScript columns */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {Object.entries(projectGroups).map(([proj, tix]) => {
           const od = tix.filter(t => t.overdue).length;
           return (
             <TeamAccordion key={proj} teamName={proj} count={`${tix.length} tickets`} meta={od > 0 ? `${od} overdue` : null}>
               <div style={{ overflowX: "auto" }}>
-                <div style={{ minWidth: 1000 }}>
+                <div style={{ minWidth: 1100 }}>
                   <div style={{ display: "grid", gridTemplateColumns: gridCol, gap: 10, padding: "8px 10px", marginBottom: 4 }}>
                     {headers.map(h => (<div key={h} style={{ fontSize: 9, color: C.dimmer, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{h}</div>))}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {tix.map((t, i) => (
-                      <div key={t.id}>
-                        <div style={{ display: "grid", gridTemplateColumns: gridCol, gap: 10, padding: "11px 10px", borderRadius: 8, transition: "background .12s", alignItems: "center" }}
-                          onMouseEnter={e => e.currentTarget.style.background = "#0c1a2e"}
-                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                          
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            {t.overdue && <Dot color={C.red} pulse />}
-                            <a href={`http://redmine.redmind.com/issues/${t.id}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blueLight, letterSpacing: "0.06em", textDecoration: "none", fontWeight: 600 }}>#{t.id}</a>
+                    {tix.map((t, i) => {
+                      const rowBg = t.overdue ? C.red+"12" : (t.due_date && (new Date(t.due_date)-new Date())/86400000 <= 3 && (new Date(t.due_date)-new Date())/86400000 >= 0) ? C.red+"08" : "transparent";
+                      const assignedStyle = !t.assigned_to ? { background:C.amber+"22", border:`1px solid ${C.amber}44`, borderRadius:6, padding:"2px 8px" } : {};
+                      return (
+                        <div key={t.id}>
+                          <div style={{ display: "grid", gridTemplateColumns: gridCol, gap: 10, padding: "11px 10px", borderRadius: 8, background:rowBg, alignItems: "center", transition:"background .12s" }}
+                            onMouseEnter={e => { if(!rowBg||rowBg==="transparent") e.currentTarget.style.background="#0c1a2e"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background=rowBg; }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              {t.overdue && <Dot color={C.red} pulse />}
+                              <a href={`http://redmine.redmind.com/issues/${t.redmine_id||t.id}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blueLight, textDecoration: "none", fontWeight: 600 }}>#{t.redmine_id||t.id}</a>
+                            </div>
+                            <div style={{ fontSize: 11, color: C.amber }}>{t.bz_id || '—'}</div>
+                            <div onClick={() => onSelectTicket(t)} style={{ fontSize: 13, fontWeight: 600, color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}>{t.title}</div>
+                            <StatusPill status={t.status}/>
+                            <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.created_at)}</div>
+                            <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.updated_at || t.last_update)}</div>
+                            <div style={{ fontSize: 12, color: C.white, fontWeight: 500, ...assignedStyle }}>{t.assigned_to ? renderName(t.assigned_to) : 'Unassigned'}</div>
+                            <div style={{ fontSize: 11, color: t.overdue ? C.red : (t.due_date && (new Date(t.due_date)-new Date())/86400000 <= 3 && (new Date(t.due_date)-new Date())/86400000 >= 0 ? C.amber : C.dim), fontWeight: t.overdue ? 600 : 400 }}>{fmtDate(t.due_date)}</div>
+                            <div style={{ fontSize: 11, color: C.dimmer, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.contributors || '—'}</div>
+                            <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>{renderName(t.manager)}</div>
                           </div>
-                          
-                          <div style={{ fontSize: 11, color: C.amber }}>{t.bz_id || '-'}</div>
-                          <div onClick={() => onSelectTicket(t)} style={{ fontSize: 13, fontWeight: 600, color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}>{t.title}</div>
-                          <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.created_at || t.start_date)}</div>
-                          <div style={{ fontSize: 11, color: C.dimmer }}>{renderName(t.assigned_by)}</div>
-                          <div style={{ fontSize: 12, color: C.white, fontWeight: 500 }}>{renderName(t.assigned_to)}</div>
-                          <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.last_update)}</div>
-                          
-                          {/* Historical Team Columns */}
-                          <div style={{ fontSize: 11, color: C.dim }}>{renderName(t.db_assignee)}</div>
-                          <div style={{ fontSize: 11, color: C.dim }}>{renderName(t.java_assignee)}</div>
-                          <div style={{ fontSize: 11, color: C.dim }}>{renderName(t.js_assignee)}</div>
-                          <div style={{ fontSize: 11, color: C.dim }}>{renderName(t.qa_assignee)}</div>
-                          <div style={{ fontSize: 11, color: C.dim }}>{renderName(t.ai_assignee)}</div>
-                          <div style={{ fontSize: 11, color: C.dim }}>{renderName(t.devops_assignee)}</div>
-                          
-                          <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>{renderName(t.manager)}</div>
+                          {i < tix.length - 1 && <Divider />}
                         </div>
-                        {i < tix.length - 1 && <Divider />}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -792,15 +899,137 @@ function Tickets({ tickets=[], onSelectTicket }) {
           );
         })}
       </div>
+
+      {/* ── ANOMALY SECTIONS ── */}
+      {anomalies && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ fontSize:11, letterSpacing:"0.12em", color:C.dimmer, textTransform:"uppercase", fontWeight:600, marginTop:8, marginBottom:2 }}>Exception Views</div>
+          <AnomalySection
+            title="Reopen Watch"
+            rows={(anomalies.reopen||[]).map(anomRow_reopen)}
+            columns={anomCols.reopen}
+          />
+          <AnomalySection
+            title="No Update in 3+ Days"
+            rows={(anomalies.stale||[]).map(anomRow_stale)}
+            columns={anomCols.stale}
+          />
+          <AnomalySection
+            title="Worked But Not Assigned"
+            rows={(anomalies.workedNotAssigned||[]).map(anomRow_worked)}
+            columns={anomCols.workedNotAssigned}
+          />
+          <AnomalySection
+            title="Assigned But No Time Logged"
+            rows={(anomalies.assignedNoTime||[]).map(anomRow_notime)}
+            columns={anomCols.assignedNoTime}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
 
-function People({ people=[], onSelectPerson, onPrepOneOnOne }) {
-  const teamGroups = groupBy(people, "team");
+function People({ people=[], overview={}, onSelectPerson, onPrepOneOnOne }) {
+  const EXPECTED_TIME_TEAMS = ['AI','DB','DevOps','JS/UI','Java','QA'];
+  const [devLoad, setDevLoad] = useState(null);
+  const [selectedTeam, setSelectedTeam] = useState('All');
+  const [timeLogFilter, setTimeLogFilter] = useState('All');
+
+  useEffect(() => {
+    fetch('/api/pm-pulse/developer-load').then(r => r.json()).then(setDevLoad).catch(() => {});
+  }, []);
+
+  function fmtDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric' });
+  }
+
+  // Team card aggregates (from workload + memberHours in overview)
+  const workload = overview.workload || [];
+  const memberHours = overview.memberHours || [];
+  const timeLogData = devLoad?.timeLog || [];
+
+  // Build per-team stats for the cards strip
+  const teamStats = EXPECTED_TIME_TEAMS.map(team => {
+    const wl = workload.find(w => w.team === team) || {};
+    const members = memberHours.filter(m => m.team === team);
+    const hoursToday = members.reduce((s, m) => s + parseFloat(m.hours_today || 0), 0);
+    const teamTimeLog = timeLogData.filter(r => r.team === team);
+    const logged = teamTimeLog.filter(r => r.logging_status === 'Logged Recently').length;
+    const compliance = teamTimeLog.length > 0 ? Math.round((logged / teamTimeLog.length) * 100) : 0;
+    return {
+      team,
+      members: wl.member_count || members.length,
+      openTickets: wl.open_tickets || 0,
+      hoursToday,
+      compliance,
+      onLeave: people.filter(p => p.team === team && p.leave).length,
+    };
+  });
+
+  // Apply team filter to everything below
+  const teamGroups = selectedTeam === 'All'
+    ? groupBy(people.filter(p => EXPECTED_TIME_TEAMS.includes(p.team)), "team")
+    : { [selectedTeam]: people.filter(p => p.team === selectedTeam) };
+
+  const loadRows = (devLoad?.load || []).filter(r => selectedTeam === 'All' ? EXPECTED_TIME_TEAMS.includes(r.team) : r.team === selectedTeam);
+  const timeLogRowsByTeam = timeLogData.filter(r => selectedTeam === 'All' ? EXPECTED_TIME_TEAMS.includes(r.team) : r.team === selectedTeam);
+  const timeLogRows = timeLogFilter === 'All'
+    ? timeLogRowsByTeam
+    : timeLogRowsByTeam.filter(r => r.logging_status === timeLogFilter);
+
+  const TEAM_PILLS = ['All', ...EXPECTED_TIME_TEAMS];
+  const STATUS_PILLS = ['All', 'Logged Recently', 'No Log in 3+ Days', 'No Log This Week'];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* ── TEAM CARDS STRIP ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:10 }}>
+        {teamStats.map(t => {
+          const selected = selectedTeam === t.team;
+          const complianceColor = t.compliance >= 80 ? C.green : t.compliance >= 50 ? C.amber : C.red;
+          return (
+            <Card
+              key={t.team}
+              onClick={() => setSelectedTeam(selected ? 'All' : t.team)}
+              style={{
+                cursor:"pointer",
+                padding:"12px 14px",
+                border: selected ? `2px solid ${C.blue}` : `1px solid ${C.border}`,
+                background: selected ? C.blue + "12" : C.card,
+                transition:"all .15s",
+              }}
+            >
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <span style={{ fontSize:13, fontWeight:700, color:C.white }}>{t.team}</span>
+                {t.onLeave > 0 && <span style={{ fontSize:9, color:C.amber, background:C.amber+"22", borderRadius:4, padding:"1px 5px", fontWeight:600 }}>{t.onLeave} away</span>}
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:C.dimmer, marginBottom:2 }}>
+                <span>{t.members} members</span>
+                <span>{t.openTickets} tickets</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginTop:6 }}>
+                <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:22, fontWeight:700, color:C.green }}>{t.hoursToday.toFixed(1)}h</span>
+                <span style={{ fontSize:10, color:complianceColor, fontWeight:600 }}>{t.compliance}% logged</span>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* ── FILTER BAR (reflects current selection) ── */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+        <span style={{ fontSize:10, color:C.dimmer, letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:600, marginRight:4 }}>Team:</span>
+        {TEAM_PILLS.map(b => (
+          <button key={b} onClick={()=>setSelectedTeam(b)} style={{ background:selectedTeam===b?C.blue:"transparent", border:`1px solid ${selectedTeam===b?C.blue:C.border}`, color:selectedTeam===b?C.white:C.dim, borderRadius:20, padding:"5px 14px", fontSize:11, fontWeight:600, cursor:"pointer", transition:"all .15s", letterSpacing:"0.04em" }}>
+            {b}
+          </button>
+        ))}
+      </div>
+
+      {/* ── MEMBERS ACCORDIONS (filtered by team) ── */}
       {Object.entries(teamGroups).map(([team, members]) => {
         const onL = members.filter(m => m.leave).length;
         return (
@@ -854,6 +1083,82 @@ function People({ people=[], onSelectPerson, onPrepOneOnOne }) {
           </TeamAccordion>
         );
       })}
+
+      {/* ── DEVELOPER WORKLOAD SECTIONS ── */}
+      {devLoad && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10, marginTop:8 }}>
+          <div style={{ fontSize:11, letterSpacing:"0.12em", color:C.dimmer, textTransform:"uppercase", fontWeight:600, marginBottom:2 }}>Developer Workload{selectedTeam !== 'All' ? ` — ${selectedTeam}` : ''}</div>
+
+          {/* Developer Load */}
+          <AnomalySection
+            title={`Developer Load (${loadRows.length})`}
+            rows={loadRows.map(r => {
+              const isOverloaded = r.total > 8;
+              const rowStyle = isOverloaded ? { background:C.amber+"15", borderRadius:6, padding:"2px 6px" } : {};
+              return [
+                <span style={{ fontSize:12, color:C.white, fontWeight:600 }}>{r.name}</span>,
+                <span style={{ fontSize:11, color:C.dim }}>{r.team}</span>,
+                <span style={{ fontSize:11, color:C.dim }}>{r.manager||'—'}</span>,
+                <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:18, fontWeight:700, color:isOverloaded?C.amber:C.blueLight, ...rowStyle }}>{r.total}</span>,
+                <span style={{ fontSize:11, color:C.dimmer }}>{r.new_count}</span>,
+                <span style={{ fontSize:11, color:C.blueLight }}>{r.in_progress_count}</span>,
+                <span style={{ fontSize:11, color:C.amber }}>{r.reopen_count}</span>,
+                <span style={{ fontSize:11, color:r.overdue?C.red:C.dimmer, fontWeight:r.overdue?700:400 }}>{r.overdue}</span>,
+                <span style={{ fontSize:11, color:r.due_soon?C.amber:C.dimmer }}>{r.due_soon}</span>,
+                <span style={{ fontSize:11, color:r.high_priority?C.red:C.dimmer }}>{r.high_priority}</span>,
+                <span style={{ fontSize:10, color:C.dimmer, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.projects||'—'}</span>,
+                <span style={{ fontSize:11, color:C.dim }}>{fmtDate(r.oldest_ticket_date)}</span>,
+                <span style={{ fontSize:11, color:C.dim }}>{fmtDate(r.latest_update)}</span>,
+              ];
+            })}
+            columns={["Developer","Team","Manager","Total","New","In Progress","Re Open","Overdue","Due Soon","High Priority","Projects","Oldest","Latest Update"]}
+          />
+
+          {/* Ageing by Developer */}
+          <AnomalySection
+            title={`Ageing by Developer (${loadRows.length})`}
+            rows={loadRows.map(r => [
+              <span style={{ fontSize:12, color:C.white, fontWeight:600 }}>{r.name}</span>,
+              <span style={{ fontSize:11, color:C.dim }}>{r.manager||'—'}</span>,
+              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:C.blueLight }}>{r.total}</span>,
+              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:r.avg_age_days>10?C.amber:C.dim }}>{r.avg_age_days||0}</span>,
+              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:r.max_age_days>15?C.red:C.dim }}>{r.max_age_days||0}</span>,
+              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:r.tickets_7plus?C.amber:C.dimmer }}>{r.tickets_7plus||0}</span>,
+              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:r.tickets_15plus?C.red:C.dimmer }}>{r.tickets_15plus||0}</span>,
+            ])}
+            columns={["Developer","Manager","Active Tickets","Avg Age (Days)","Oldest Age (Days)","Tickets 7+ Days","Tickets 15+ Days"]}
+          />
+
+          {/* Developer Time Log — with status filter */}
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginTop:4, marginBottom:2 }}>
+            <span style={{ fontSize:10, color:C.dimmer, letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:600, marginRight:4 }}>Log Status:</span>
+            {STATUS_PILLS.map(s => (
+              <button key={s} onClick={()=>setTimeLogFilter(s)} style={{ background:timeLogFilter===s?C.blue:"transparent", border:`1px solid ${timeLogFilter===s?C.blue:C.border}`, color:timeLogFilter===s?C.white:C.dim, borderRadius:20, padding:"4px 12px", fontSize:10, fontWeight:600, cursor:"pointer", transition:"all .15s", letterSpacing:"0.04em" }}>
+                {s}
+              </button>
+            ))}
+          </div>
+          <AnomalySection
+            title={`Developer Time Log (${timeLogRows.length})`}
+            rows={timeLogRows.map(r => {
+              const isNoLog = r.logging_status === 'No Log This Week';
+              const isLate  = r.logging_status === 'No Log in 3+ Days';
+              const statusColor = isNoLog ? C.red : isLate ? C.amber : C.green;
+              return [
+                <span style={{ fontSize:12, color:C.white, fontWeight:600 }}>{r.name}</span>,
+                <span style={{ fontSize:11, color:C.dim }}>{r.team}</span>,
+                <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:C.green }}>{(r.hours_today||0).toFixed(1)}h</span>,
+                <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:C.blueLight }}>{(r.hours_yesterday||0).toFixed(1)}h</span>,
+                <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:C.blueLight }}>{(r.hours_last_7days||0).toFixed(1)}h</span>,
+                <span style={{ fontSize:11, color:C.dim }}>{fmtDate(r.last_log_date)}</span>,
+                <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:isNoLog||isLate?statusColor:C.dim }}>{r.days_since_last_log ?? '—'}</span>,
+                <span style={{ fontSize:11, color:statusColor, fontWeight:600, background:statusColor+"18", border:`1px solid ${statusColor}44`, borderRadius:20, padding:"2px 10px", display:"inline-block" }}>{r.logging_status}</span>,
+              ];
+            })}
+            columns={["Developer","Team","Today","Yesterday","Last 7 Days","Last Log Date","Days Since","Status"]}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -868,7 +1173,7 @@ const NAV_ICONS = {
   Admin:    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 9.36l-7.1 7.1a1 1 0 0 1-1.4 0l-2.8-2.8a1 1 0 0 1 0-1.4l7.1-7.1a6 6 0 0 1 9.36-7.94z"/></svg>,
   Intelligence: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7v1a7 7 0 0 1-14 0V9a7 7 0 0 1 7-7z"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="9" r="1" fill="currentColor"/></svg>,
 };
-const NAV_ITEMS = ["Overview","Team","Time","Tickets","People","Admin","Intelligence"];
+const NAV_ITEMS = ["Overview","Tickets","People","Time","Admin","Intelligence"];
 
 function TelegramWebhookCard() {
   const [webhookInfo, setWebhookInfo] = useState(null);
@@ -1838,15 +2143,9 @@ export default function Dashboard({ onLogout, currentUser }) {
           {error && <div style={{ color:C.red, padding:20, background:C.red+"11", borderRadius:12, border:`1px solid ${C.red}33` }}>{error}</div>}
           
           {screen==="Overview" && <Overview overview={overview} people={people} tickets={tickets} timeLogs={timeLogs} currentUser={currentUser}/>}
-          {screen==="Team"     && (
-            <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
-              <TeamLeave people={people} onSelectPerson={setPerson}/>
-              <TeamCompare teams={overview.workload||[]} people={people} tickets={tickets} timeLogs={timeLogs}/>
-            </div>
-          )}
           {screen==="Time"     && <TimeLogs timeLogs={timeLogs}/>}
           {screen==="Tickets"  && <Tickets tickets={tickets} onSelectTicket={setTicket}/>}
-          {screen==="People"   && <People people={people} onSelectPerson={setPerson} onPrepOneOnOne={setOneOnOnePerson}/>}
+          {screen==="People"   && <People people={people} overview={overview} onSelectPerson={setPerson} onPrepOneOnOne={setOneOnOnePerson}/>}
           {screen==="Admin"    && <Admin />}
           {screen==="Intelligence" && <IntelligenceChat currentUser={currentUser}/>}
         </div>

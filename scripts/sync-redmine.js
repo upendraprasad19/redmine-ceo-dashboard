@@ -100,11 +100,33 @@ async function syncUsers() {
   }
 }
 
-// ── Sync: Projects (always full — only 80, negligible cost) ───────
+// Approved project IDs (from AppScript)
+const APPROVED_PROJECT_IDS = new Set([2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76]);
+
+// Built at sync start: maps Delivery Owner enum value (as string) → Neon user id
+// (Delivery Owner, custom field id 25, is an enumeration field — NOT a User field —
+// so its values are internal enum IDs specific to this field, not Redmine user IDs.)
+const deliveryOwnerEnumToNeonId = new Map();
+async function buildDeliveryOwnerEnumMap() {
+  const res = await fetch(`${REDMINE_URL}/custom_fields.json?key=${REDMINE_KEY}`);
+  if (!res.ok) { console.log('  ⚠️  Cannot fetch custom_fields; Delivery Owner will be empty'); return; }
+  const data = await res.json();
+  const cf = (data.custom_fields || []).find(c => c.id === 25);
+  const pv = cf?.possible_values || [];
+  for (const opt of pv) {
+    const rows = await sql`SELECT id FROM users WHERE name = ${opt.label} LIMIT 1`;
+    if (rows.length > 0) deliveryOwnerEnumToNeonId.set(String(opt.value), rows[0].id);
+  }
+  console.log(`  ✓ Delivery Owner enum map: ${deliveryOwnerEnumToNeonId.size}/${pv.length} resolved`);
+}
+
+// ── Sync: Projects (only approved projects) ───────────────────────
 async function syncProjects() {
-  console.log('\n📁 Syncing projects...');
+  console.log('\n📁 Syncing approved projects only...');
   const projects = await fetchAll('/projects', 'projects');
+  let count = 0;
   for (const p of projects) {
+    if (!APPROVED_PROJECT_IDS.has(p.id)) continue;
     const res = await sql`
       INSERT INTO projects (redmine_id, name, description, status)
       VALUES (${p.id}, ${p.name}, ${p.description || null}, ${p.status === 1 ? 'active' : 'archived'})
@@ -112,29 +134,34 @@ async function syncProjects() {
       RETURNING id
     `;
     projectCache.set(p.id, res[0].id);
+    count++;
   }
+  console.log(`  ✓ Synced ${count} approved projects`);
 }
 
-// ── Sync: Issues (delta by updated_on) ───────────────────────────
+// ── Sync: Issues (delta by updated_on, only approved projects) ──
 async function syncIssues(sinceDate) {
-  console.log(`\n🎫 Syncing issues updated since ${sinceDate}...`);
+  console.log(`\n🎫 Syncing issues updated since ${sinceDate} (approved projects only)...`);
   const issues = await fetchAll(
     '/issues', 'issues',
     `&status_id=*&updated_on=>=${sinceDate}&sort=updated_on:desc`
   );
 
-  if (issues.length === 0) {
-    console.log('  ✓ No new/changed issues.');
+  // Filter to only approved projects
+  const filtered = issues.filter(i => APPROVED_PROJECT_IDS.has(i.project?.id));
+
+  if (filtered.length === 0) {
+    console.log('  ✓ No new/changed issues in approved projects.');
     return;
   }
 
-  const statusMap   = { 'New': 'Todo', 'In Progress': 'In Progress', 'Code Review': 'Review', 'Blocked': 'Blocked', 'Resolved': 'Closed', 'Closed': 'Closed', 'Feedback': 'Review' };
+  const statusMap   = { 'New': 'Todo', 'In Progress': 'In Progress', 'Re Open': 'Re Open', 'Open': 'Open', 'Code Review': 'Review', 'Feedback': 'Review', 'Blocked': 'Blocked', 'Resolved': 'Closed', 'Closed': 'Closed', 'Verified': 'Closed', 'Rejected': 'Closed' };
   const priorityMap = { 'Low': 'Low', 'Normal': 'Medium', 'High': 'High', 'Urgent': 'Critical', 'Immediate': 'Critical' };
 
-  console.log(`\n⏳ Upserting ${issues.length} issues...`);
+  console.log(`\n⏳ Upserting ${filtered.length} issues...`);
   const chunkSize = 20;
-  for (let i = 0; i < issues.length; i += chunkSize) {
-    const chunk = issues.slice(i, i + chunkSize);
+  for (let i = 0; i < filtered.length; i += chunkSize) {
+    const chunk = filtered.slice(i, i + chunkSize);
     await Promise.all(chunk.map(async (issue) => {
       const assigneeId = await getNeonUserId(issue.assigned_to);
       const authorId   = await getNeonUserId(issue.author);
@@ -144,10 +171,17 @@ async function syncIssues(sinceDate) {
       const bzField    = issue.custom_fields?.find(cf => cf.id === 9);
       const bzId       = bzField ? String(bzField.value) : null;
 
+      // Delivery Owner custom field (id=25) — enumeration field (NOT User field).
+      // Values are enum IDs specific to this field; use deliveryOwnerEnumToNeonId to resolve.
+      const doField = issue.custom_fields?.find(cf => cf.id === 25);
+      const doEnumVals = Array.isArray(doField?.value) ? doField.value : (doField?.value ? [doField.value] : []);
+      const resolvedIds = doEnumVals.map(v => deliveryOwnerEnumToNeonId.get(String(v))).filter(Boolean);
+      const deliveryOwnerIds = resolvedIds.length > 0 ? resolvedIds : null;
+
       await sql`
-        INSERT INTO issues (redmine_id, project_id, title, description, status, priority, assigned_to_id, author_id, bz_id, start_date, due_date, done_ratio, closed_at, created_at, updated_at)
-        VALUES (${issue.id}, ${projectId || null}, ${issue.subject}, ${issue.description || null}, ${status}, ${priority}, ${assigneeId}, ${authorId}, ${bzId}, ${issue.start_date || null}, ${issue.due_date || null}, ${issue.done_ratio || 0}, ${issue.closed_on || null}, ${issue.created_on}, ${issue.updated_on})
-        ON CONFLICT (redmine_id) DO UPDATE SET status=EXCLUDED.status, priority=EXCLUDED.priority, assigned_to_id=EXCLUDED.assigned_to_id, bz_id=EXCLUDED.bz_id, done_ratio=EXCLUDED.done_ratio, due_date=EXCLUDED.due_date, closed_at=EXCLUDED.closed_at, updated_at=EXCLUDED.updated_at
+        INSERT INTO issues (redmine_id, project_id, title, description, status, priority, assigned_to_id, author_id, bz_id, delivery_owner_ids, start_date, due_date, done_ratio, closed_at, created_at, updated_at)
+        VALUES (${issue.id}, ${projectId || null}, ${issue.subject}, ${issue.description || null}, ${status}, ${priority}, ${assigneeId}, ${authorId}, ${bzId}, ${deliveryOwnerIds}, ${issue.start_date || null}, ${issue.due_date || null}, ${issue.done_ratio || 0}, ${issue.closed_on || null}, ${issue.created_on}, ${issue.updated_on})
+        ON CONFLICT (redmine_id) DO UPDATE SET status=EXCLUDED.status, priority=EXCLUDED.priority, assigned_to_id=EXCLUDED.assigned_to_id, bz_id=EXCLUDED.bz_id, delivery_owner_ids=EXCLUDED.delivery_owner_ids, done_ratio=EXCLUDED.done_ratio, due_date=EXCLUDED.due_date, closed_at=EXCLUDED.closed_at, updated_at=EXCLUDED.updated_at
       `;
 
       if (assigneeId) {
@@ -170,22 +204,22 @@ async function syncIssues(sinceDate) {
   console.log(`\n  ✓ ${issues.length} issues upserted`);
 }
 
-// ── Sync: Time Entries (delta with 14-day safety buffer) ──────────
-// Redmine time_entries API only supports spent_on filter (no updated_on).
-// We buffer 14 days back from last sync to catch retroactively logged time.
+// ── Sync: Time Entries (delta with 14-day buffer, approved projects) ─
 async function syncTimeEntries(sinceDate) {
-  console.log(`\n⏱  Syncing time entries since ${sinceDate} (14-day buffer)...`);
+  console.log(`\n⏱  Syncing time entries since ${sinceDate} (approved projects only)...`);
   const entries = await fetchAll('/time_entries', 'time_entries', `&spent_on=>=${sinceDate}`);
+  // Filter to only approved projects
+  const filtered = entries.filter(e => APPROVED_PROJECT_IDS.has(e.project?.id));
 
-  if (entries.length === 0) {
-    console.log('  ✓ No new time entries.');
+  if (filtered.length === 0) {
+    console.log('  ✓ No new time entries in approved projects.');
     return;
   }
 
-  console.log(`\n⏳ Upserting ${entries.length} time entries...`);
+  console.log(`\n⏳ Upserting ${filtered.length} time entries...`);
   const chunkSize = 20;
-  for (let i = 0; i < entries.length; i += chunkSize) {
-    const chunk = entries.slice(i, i + chunkSize);
+  for (let i = 0; i < filtered.length; i += chunkSize) {
+    const chunk = filtered.slice(i, i + chunkSize);
     await Promise.all(chunk.map(async (e) => {
       const userId    = await getNeonUserId(e.user);
       const projectId = projectCache.get(e.project?.id);
@@ -199,7 +233,7 @@ async function syncTimeEntries(sinceDate) {
     }));
     if (i % 200 === 0) process.stdout.write('.');
   }
-  console.log(`\n  ✓ ${entries.length} time entries upserted`);
+  console.log(`\n  ✓ ${filtered.length} time entries upserted`);
 }
 
 // ── Main ──────────────────────────────────────────────────────────
@@ -243,6 +277,7 @@ async function main() {
   try {
     await syncUsers();
     await syncProjects();
+    await buildDeliveryOwnerEnumMap();
     await syncIssues(issuesSince);
     await syncTimeEntries(timeEntriesSince);
 
