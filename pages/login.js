@@ -231,6 +231,14 @@ export default function LoginPage() {
                 Forgot password?
               </a>
             </div>
+            <div style={{ textAlign: "center", marginTop: 10, fontSize: 11, color: C.dim }}>
+              New to ThinkingCode Dashboard?{" "}
+              <a href="/register" style={{ color: C.dim, textDecoration: "none", fontWeight: 600 }}
+                 onMouseEnter={e => e.currentTarget.style.color = C.white}
+                 onMouseLeave={e => e.currentTarget.style.color = C.dim}>
+                Register here
+              </a>
+            </div>
           </form>
         </div>
 
