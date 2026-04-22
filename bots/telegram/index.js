@@ -11,7 +11,10 @@ const { getRecentMessages, saveMessage, getRedis } = require('../../lib/redis');
 const { tools } = require('../../lib/gpt-tools');
 const { executeToolCall } = require('../../lib/gpt-executor');
 const { buildSystemPrompt } = require('./prompt');
-const { startOnboarding, handleOnboardingCallback, handleOnboardingText } = require('./onboarding');
+const {
+  startOnboarding, handleOnboardingCallback, handleOnboardingText,
+  sendDeveloperConsent, recordConsent, revokeConsent,
+} = require('./onboarding');
 const { handleIntimationCallback } = require('./handlers/intimation');
 const { getOpenThreadForTarget, logEvent, transitionStatus, relayResponse } = require('../../lib/intimation-relay');
 const { extractCommitment, createCommitment } = require('../../lib/commitments');
@@ -43,6 +46,16 @@ bot.use(async (ctx, next) => {
     }
 
     ctx.botUser = users[0];
+
+    // Developer consent gate
+    if (users[0].role === 'developer' && !users[0].consent_given_at) {
+      const txt = ctx.message?.text || '';
+      if (!['/start','/agree'].some(cmd => txt === cmd || txt.startsWith(cmd + ' '))) {
+        await ctx.reply('Please reply /agree first to continue.');
+        return;
+      }
+    }
+
     return next();
   } catch (err) {
     console.error('Telegram auth middleware error:', err);
@@ -54,6 +67,19 @@ bot.use(async (ctx, next) => {
 bot.start(async (ctx) => {
   const user = ctx.botUser;
   if (!user) return;
+
+  // Developers get a consent screen first — not the full onboarding.
+  if (user.role === 'developer') {
+    if (!user.consent_given_at) {
+      await sendDeveloperConsent(ctx);
+      return;
+    }
+    await ctx.reply(
+      `Hi ${user.display_name || user.username}. You're registered. I'll send you intimations here from your manager or team lead — you can respond with the buttons or plain text.`,
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
 
   const greeting = user.role === 'manager'
     ? `Hello ${user.display_name || user.username}! 👋\n\nI'm your Company OS Intelligence Assistant. I have access to all teams and projects.\n\nYou can ask me things like:\n• "Show overdue tickets"\n• "Who hasn't logged time today?"\n• "Status of Project X"\n• "Prepare 1-on-1 for [Name]"\n• "Team health overview"`
@@ -78,6 +104,24 @@ bot.command('preferences', async (ctx) => {
     await r.del(`onboard:${user.id}`);
   } catch (e) { /* ignore */ }
   await startOnboarding(ctx, user);
+});
+
+bot.command('agree', async (ctx) => {
+  const user = ctx.botUser;
+  if (!user || user.role !== 'developer') {
+    return ctx.reply('This command is only for developer accounts.');
+  }
+  await recordConsent(user.id);
+  await ctx.reply('✓ Thanks — consent recorded. You\'ll now receive intimations here.');
+});
+
+bot.command('revoke', async (ctx) => {
+  const user = ctx.botUser;
+  if (!user || user.role !== 'developer') {
+    return ctx.reply('This command is only for developer accounts.');
+  }
+  await revokeConsent(user.id);
+  await ctx.reply('Consent revoked. I won\'t relay messages to/from you until you run /agree again.');
 });
 
 // ── Callback query handler (onboarding buttons) ──

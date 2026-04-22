@@ -393,4 +393,31 @@ async function markSkipped(userId) {
   }
 }
 
-module.exports = { startOnboarding, handleOnboardingCallback, handleOnboardingText };
+// ── Developer consent (Phase 1) ────────────────────────────────
+
+const CONSENT_TEXT =
+  `Your messages to this bot are logged and may be reviewed by your manager or team lead for coaching and delivery purposes.\n\n` +
+  `Reply */agree* to continue receiving intimations and relaying replies, or */revoke* at any time to stop.`;
+
+async function sendDeveloperConsent(ctx) {
+  await ctx.reply(CONSENT_TEXT, { parse_mode: 'Markdown' });
+}
+
+async function recordConsent(userId) {
+  const sql = getDb();
+  await sql`UPDATE dashboard_users SET consent_given_at = NOW() WHERE id = ${userId}`;
+}
+
+async function revokeConsent(userId) {
+  const sql = getDb();
+  await sql`UPDATE dashboard_users SET consent_given_at = NULL WHERE id = ${userId}`;
+}
+
+module.exports = {
+  startOnboarding,
+  handleOnboardingCallback,
+  handleOnboardingText,
+  sendDeveloperConsent,
+  recordConsent,
+  revokeConsent,
+};
