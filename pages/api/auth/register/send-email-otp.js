@@ -78,6 +78,14 @@ export default async function handler(req, res) {
       // Do NOT revert the stored OTP: if the user clicks "resend" when
       // Resend is flaky, we want the new OTP stored so a later success works.
       console.error('send-email-otp: sendOtp failed:', mailErr);
+      // A provider outage shouldn't consume the user's 3/hr budget — compensate
+      // by rolling back the increment that rateLimit() just applied. Clamped
+      // at zero so a row that was just inserted (attempts=1) goes back to 0.
+      await sql`
+        UPDATE register_rate_limit
+        SET attempts = GREATEST(attempts - 1, 0)
+        WHERE ip = ${ip} AND bucket = 'send_email_otp'
+      `;
       return sendError(
         res,
         502,

@@ -85,6 +85,7 @@ export default async function handler(req, res) {
         UPDATE pending_registrations
         SET email_otp_attempts = email_otp_attempts + 1
         WHERE id = ${pending.id}
+          AND status = 'awaiting_verification'
         RETURNING email_otp_attempts
       `;
       const newAttempts = updated.length > 0 ? Number(updated[0].email_otp_attempts) : MAX_ATTEMPTS;
