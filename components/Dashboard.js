@@ -624,11 +624,23 @@ function TeamLeave({ people=[], onSelectPerson }) {
 }
 
 
-function TimeLogs({ timeLogs=[] }) {
+function TimeLogs({ timeLogs: initialTimeLogs = [] }) {
   const [range, setRange] = useState("daily");
-  const teamGroups = groupBy(timeLogs, "team");
-  const missing = timeLogs.filter(t => !t.logged);
-  const totalHours = timeLogs.reduce((s, m) => s + (m.h || 0), 0).toFixed(1);
+  const [logs, setLogs] = useState(initialTimeLogs);
+
+  useEffect(() => {
+    if (range === "daily") { setLogs(initialTimeLogs); return; }
+    let cancelled = false;
+    fetch(`/api/timelogs?range=${range}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setLogs(d.logs || []); })
+      .catch(() => { if (!cancelled) setLogs([]); });
+    return () => { cancelled = true; };
+  }, [range, initialTimeLogs]);
+
+  const teamGroups = groupBy(logs, "team");
+  const missing = logs.filter(t => !t.logged);
+  const totalHours = logs.reduce((s, m) => s + (Number(m.hours) || 0), 0).toFixed(1);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -640,7 +652,7 @@ function TimeLogs({ timeLogs=[] }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
         {[
           { label: "Total Logged", val: `${totalHours}h`, color: C.white, sub: "This period" },
-          { label: "On Target", val: `${timeLogs.filter(t => t.logged).length}/${timeLogs.length}`, color: C.green, sub: "Logged today" },
+          { label: "On Target", val: `${logs.filter(t => t.logged).length}/${logs.length}`, color: C.green, sub: "Logged today" },
           { label: "Missing", val: missing.length, color: missing.length ? C.red : C.green, sub: "Need to log" }
         ].map(k => (
           <Card key={k.label}>
@@ -664,7 +676,7 @@ function TimeLogs({ timeLogs=[] }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {Object.entries(teamGroups).map(([team, members]) => {
           const miss = members.filter(m => !m.logged).length;
-          const teamTotal = members.reduce((s, m) => s + (m.h || 0), 0).toFixed(1);
+          const teamTotal = members.reduce((s, m) => s + (Number(m.hours) || 0), 0).toFixed(1);
           return (
             <TeamAccordion key={team} teamName={team} count={`${teamTotal}h logged`} meta={miss > 0 ? `${miss} missing` : null}>
               {members.map((m, i) => (
@@ -674,8 +686,8 @@ function TimeLogs({ timeLogs=[] }) {
                     <span style={{ width: 120, fontSize: 13, color: C.white, fontWeight: 500 }}>{m.name}</span>
                     {m.logged ? (
                       <>
-                        <Bar pct={(m.h / 8) * 100} color={C.blue} h={5} />
-                        <span style={{ fontSize: 12, color: C.blueLight, fontWeight: 600, width: 36, textAlign: "right" }}>{m.h}h</span>
+                        <Bar pct={((Number(m.hours) || 0) / 8) * 100} color={C.blue} h={5} />
+                        <span style={{ fontSize: 12, color: C.blueLight, fontWeight: 600, width: 36, textAlign: "right" }}>{Number(m.hours) || 0}h</span>
                         <Dot color={C.green} />
                       </>
                     ) : (
