@@ -96,6 +96,21 @@ describe('lib/email (Resend transactional wrapper)', () => {
         sendAccessApproved('a@b.com', 'Vivek', 'https://x.test/r')
       ).rejects.toThrow(/rate limited/);
     });
+
+    it('rejects non-http(s) links', async () => {
+      await expect(
+        sendAccessApproved('a@b.com', 'Vivek', 'javascript:alert(1)')
+      ).rejects.toThrow(/http\(s\)/);
+    });
+
+    it('escapes HTML-injection attempts in name and link', async () => {
+      await sendAccessApproved('a@b.com', '"><img src=x>', 'https://x.test/y?q="><script>');
+      const payload = sendMock.mock.calls[0][0];
+      expect(payload.html).not.toContain('<img src=x>');
+      expect(payload.html).not.toContain('"><script>');
+      expect(payload.html).toContain('&quot;&gt;&lt;img');
+      expect(payload.html).toContain('&quot;&gt;&lt;script&gt;');
+    });
   });
 
   // ---------- sendAccessRejected ----------
@@ -120,6 +135,20 @@ describe('lib/email (Resend transactional wrapper)', () => {
     it('throws with Resend error message when send returns error', async () => {
       sendMock.mockResolvedValueOnce({ data: null, error: { message: 'rate limited' } });
       await expect(sendAccessRejected('a@b.com', 'Pradeep')).rejects.toThrow(/rate limited/);
+    });
+
+    it('escapes HTML-injection attempts in name', async () => {
+      await sendAccessRejected('a@b.com', '<script>alert(1)</script>');
+      const payload = sendMock.mock.calls[0][0];
+      expect(payload.html).not.toContain('<script>alert(1)</script>');
+      expect(payload.html).toContain('&lt;script&gt;');
+    });
+  });
+
+  describe('email normalization', () => {
+    it('normalizes thinking-code.com → thinkingcode.com on send', async () => {
+      await sendOtp('  Someone@THINKING-CODE.com  ', '123456');
+      expect(sendMock.mock.calls[0][0].to).toBe('someone@thinkingcode.com');
     });
   });
 });
