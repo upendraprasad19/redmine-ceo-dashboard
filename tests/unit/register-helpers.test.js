@@ -30,6 +30,16 @@ describe('generateOtp', () => {
 });
 
 describe('getClientIp', () => {
+  it('prefers x-vercel-forwarded-for over x-forwarded-for', () => {
+    const req = {
+      headers: {
+        'x-vercel-forwarded-for': '203.0.113.9',
+        'x-forwarded-for': '10.0.0.1',
+      },
+    };
+    expect(getClientIp(req)).toBe('203.0.113.9');
+  });
+
   it('prefers the first entry of x-forwarded-for, trimmed', () => {
     const req = {
       headers: { 'x-forwarded-for': '  203.0.113.5 , 10.0.0.1 , 10.0.0.2  ' },

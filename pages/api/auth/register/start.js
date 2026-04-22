@@ -13,6 +13,9 @@ const {
 } = require('../../../../lib/register-helpers');
 
 const USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
+// Cheap shape check: not RFC-5322 compliant but catches the trivial garbage
+// that would otherwise poison the pending_registrations email unique index.
+const EMAIL_SHAPE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -59,7 +62,7 @@ export default async function handler(req, res) {
       return sendError(res, 400, 'INVALID_INPUT', 'email is required');
     }
     const normEmail = normalizeEmail(email);
-    if (!normEmail || !normEmail.includes('@')) {
+    if (!normEmail || !EMAIL_SHAPE_RE.test(normEmail)) {
       return sendError(res, 400, 'INVALID_INPUT', 'email is not a valid address');
     }
 
