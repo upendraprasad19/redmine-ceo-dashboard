@@ -9,6 +9,9 @@ config({ path: '.env.local' });
 import { neon } from '@neondatabase/serverless';
 import emailUtils from '../lib/email-utils.js';
 const { normalizeEmail } = emailUtils;
+import emailLib from '../lib/email.js';
+const { sendAccessApproved } = emailLib;
+import jwt from 'jsonwebtoken';
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -238,6 +241,77 @@ async function syncTimeEntries(sinceDate) {
   console.log(`\n  ✓ ${filtered.length} time entries upserted`);
 }
 
+// ── Sync: resolve access_requests that now match Redmine users ────
+// Runs at the end of a successful sync. For each access_request whose
+// email now maps to an active users row:
+//   - mark the request 'resolved' (preserve existing reviewed_at)
+//   - if the request was previously 'approved' (admin approved in UI),
+//     sign a one-click JWT (7d) and email the applicant via sendAccessApproved
+//   - if previously 'pending' (appeared in Redmine before admin review),
+//     silently drop to 'resolved' — no email.
+async function resolveAccessRequests() {
+  const matches = await sql`
+    SELECT ar.id, ar.full_name, ar.email, ar.status, u.id AS users_id, u.name
+    FROM access_requests ar
+    JOIN users u ON LOWER(u.email) = LOWER(ar.email)
+    WHERE ar.status IN ('pending','approved')
+      AND u.active = true
+  `;
+
+  if (matches.length === 0) {
+    console.log('\n📨 access-requests: 0 matches to resolve');
+    return;
+  }
+
+  const BASE_URL = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || null;
+  const JWT_SECRET = process.env.JWT_SECRET;
+
+  let pendingResolved = 0;
+  let approvedResolved = 0;
+  let emailsSent = 0;
+
+  for (const m of matches) {
+    const wasApproved = m.status === 'approved';
+
+    await sql`
+      UPDATE access_requests
+      SET status = 'resolved',
+          reviewed_at = COALESCE(reviewed_at, NOW())
+      WHERE id = ${m.id}
+    `;
+
+    if (wasApproved) approvedResolved++; else pendingResolved++;
+
+    if (!wasApproved) continue; // pending→resolved: no email
+
+    // approved → resolved: send the one-click link
+    if (!BASE_URL) {
+      console.warn(`  ⚠️  access-request ${m.id}: PUBLIC_BASE_URL / NEXT_PUBLIC_APP_URL unset; skipping approval email`);
+      continue;
+    }
+    if (!JWT_SECRET) {
+      console.warn(`  ⚠️  access-request ${m.id}: JWT_SECRET unset; skipping approval email`);
+      continue;
+    }
+
+    try {
+      const token = jwt.sign(
+        { req_id: m.id, redmine_user_id: m.users_id, purpose: 'complete_registration' },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      const link = `${BASE_URL.replace(/\/$/, '')}/register?req=${token}`;
+      await sendAccessApproved(m.email, m.name || m.full_name, link);
+      emailsSent++;
+    } catch (err) {
+      console.error('access-approved email failed:', err);
+      // don't revert — DB state is authoritative
+    }
+  }
+
+  console.log(`\n📨 access-requests: ${pendingResolved} pending→resolved, ${approvedResolved} approved→resolved (emails sent: ${emailsSent})`);
+}
+
 // ── Main ──────────────────────────────────────────────────────────
 async function main() {
   const syncStartedAt = new Date();
@@ -282,6 +356,7 @@ async function main() {
     await buildDeliveryOwnerEnumMap();
     await syncIssues(issuesSince);
     await syncTimeEntries(timeEntriesSince);
+    await resolveAccessRequests();
 
     // Persist sync timestamp only on full success
     await setLastSyncedAt(syncStartedAt);
