@@ -8,7 +8,9 @@
     "start": "next start",
     "sync": "node scripts/sync-redmine.js",
     "migrate": "node scripts/migrate.js",
-    "seed": "node scripts/seed-admin.js"
+    "seed": "node scripts/seed-admin.js",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.3",
@@ -28,6 +30,7 @@
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "vitest": "^1.6.1"
   }
 }
