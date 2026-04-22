@@ -5,6 +5,6 @@ module.exports = {
     environment: 'node',
     globals: false,
     testTimeout: 10000,
-    pool: 'forks',
+    pool: 'threads',
   },
 };
