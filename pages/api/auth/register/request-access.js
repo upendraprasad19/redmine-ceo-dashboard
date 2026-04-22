@@ -127,15 +127,18 @@ export default async function handler(req, res) {
 
     // --- Idempotency: don't create duplicate pending/approved for same email.
     // We silently succeed so the UI doesn't leak whether an email has already
-    // asked, and so a double-submit doesn't spam Upendra's DMs.
+    // asked, and so a double-submit doesn't spam Upendra's DMs. Return the
+    // actual status of the existing row so the UI can pick the right copy
+    // (e.g. "already pending" vs "already approved, check your inbox").
     const existing = await sql`
-      SELECT 1 FROM access_requests
+      SELECT status FROM access_requests
       WHERE LOWER(email) = LOWER(${normalizedEmail})
         AND status IN ('pending', 'approved')
+      ORDER BY created_at DESC
       LIMIT 1
     `;
     if (existing.length > 0) {
-      return res.status(200).json({ ok: true, status: 'pending', duplicate: true });
+      return res.status(200).json({ ok: true, status: existing[0].status, duplicate: true });
     }
 
     const inserted = await sql`
