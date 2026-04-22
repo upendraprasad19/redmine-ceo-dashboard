@@ -12,3 +12,6 @@ tmp/
 tmp-*.js
 
 .vercel
+
+# Reference-only dumps, not part of the Next.js app
+appscript data.txt
