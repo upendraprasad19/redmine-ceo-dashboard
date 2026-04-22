@@ -38,7 +38,11 @@ export default async function handler(req, res) {
               (SELECT COALESCE(SUM(te.hours), 0) FROM time_entries te
                JOIN users u ON u.id = te.user_id
                WHERE u.team = ${team}
-               AND te.spent_on = CURRENT_DATE - 1) AS yesterday_hours
+               AND te.spent_on = CURRENT_DATE - 1) AS yesterday_hours,
+              (SELECT COALESCE(SUM(te.hours), 0) FROM time_entries te
+               JOIN users u ON u.id = te.user_id
+               WHERE u.team = ${team}
+               AND te.spent_on = CURRENT_DATE) AS today_hours
           `
         : sql`
             SELECT
@@ -53,7 +57,9 @@ export default async function handler(req, res) {
                WHERE dts.logged_today = false
                AND dts.team = ANY(${EXPECTED_TIME_TEAMS}::text[])) AS no_time_log,
               (SELECT COALESCE(SUM(hours), 0) FROM time_entries
-               WHERE spent_on = CURRENT_DATE - 1) AS yesterday_hours
+               WHERE spent_on = CURRENT_DATE - 1) AS yesterday_hours,
+              (SELECT COALESCE(SUM(hours), 0) FROM time_entries
+               WHERE spent_on = CURRENT_DATE) AS today_hours
           `,
 
       // Projects with deadline + progress

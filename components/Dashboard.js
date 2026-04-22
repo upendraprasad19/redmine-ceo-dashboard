@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import IntelligenceChat from "./IntelligenceChat";
 import PinnedInsights from "./PinnedInsights";
 import OneOnOnePrep from "./OneOnOnePrep";
@@ -539,9 +539,9 @@ function Overview({ overview={}, people=[], tickets=[], timeLogs=[], currentUser
           <div style={{ fontSize:11, color:C.dimmer, marginTop:6 }}>Today</div>
         </Card>
         <Card>
-          <Label>Yesterday Hours</Label>
-          <BigNum value={parseFloat(kpis.yesterday_hours || 0).toFixed(1)} color={C.green} size={32}/>
-          <div style={{ fontSize:11, color:C.dimmer, marginTop:6 }}>Total logged</div>
+          <Label>Today's Hours</Label>
+          <BigNum value={parseFloat(kpis.today_hours || 0).toFixed(1)} color={C.green} size={32}/>
+          <div style={{ fontSize:11, color:C.dimmer, marginTop:6 }}>Logged so far today</div>
         </Card>
         <Card>
           <Label>Overdue</Label>
@@ -633,34 +633,80 @@ function TeamLeave({ people=[], onSelectPerson }) {
 }
 
 
-function TimeLogs({ timeLogs: initialTimeLogs = [] }) {
+function TimeLogs({ timeLogs: initialTimeLogs = [], overview = {} }) {
   const [range, setRange] = useState("daily");
   const [logs, setLogs] = useState(initialTimeLogs);
 
+  const isoDate = d => d.toISOString().slice(0, 10);
+  const today = new Date();
+  const weekAgo = new Date(); weekAgo.setDate(today.getDate() - 7);
+  const [customFrom, setCustomFrom] = useState(isoDate(weekAgo));
+  const [customTo, setCustomTo] = useState(isoDate(today));
+  const [customApplied, setCustomApplied] = useState(0);
+
   useEffect(() => {
     if (range === "daily") { setLogs(initialTimeLogs); return; }
+    if (range === "custom" && (!customApplied || !customFrom || !customTo)) return;
     let cancelled = false;
-    fetch(`/api/timelogs?range=${range}`)
+    const qs = range === "custom"
+      ? `range=custom&from=${customFrom}&to=${customTo}`
+      : `range=${range}`;
+    fetch(`/api/timelogs?${qs}`)
       .then(r => r.json())
       .then(d => { if (!cancelled) setLogs(d.logs || []); })
       .catch(() => { if (!cancelled) setLogs([]); });
     return () => { cancelled = true; };
-  }, [range, initialTimeLogs]);
+  }, [range, initialTimeLogs, customApplied]);
 
   const teamGroups = groupBy(logs, "team");
   const missing = logs.filter(t => !t.logged);
   const totalHours = logs.reduce((s, m) => s + (Number(m.hours) || 0), 0).toFixed(1);
+  const yesterdayHours = parseFloat(overview?.kpis?.yesterday_hours || 0).toFixed(1);
+
+  const rangeLabel = useMemo(() => {
+    const fmt = d => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const now = new Date();
+    const startOfWeek = (() => { const d = new Date(now); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return d; })();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfQuarter = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    if (range === "daily")     return fmt(now);
+    if (range === "weekly")    return `${fmt(startOfWeek)} – ${fmt(now)}`;
+    if (range === "monthly")   return `${fmt(startOfMonth)} – ${fmt(now)}`;
+    if (range === "quarterly") return `${fmt(startOfQuarter)} – ${fmt(now)}`;
+    if (range === "yearly")    return `${fmt(startOfYear)} – ${fmt(now)}`;
+    if (range === "custom" && customApplied) return `${fmt(new Date(customFrom))} – ${fmt(new Date(customTo))}`;
+    return "";
+  }, [range, customApplied, customFrom, customTo]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         {["daily", "weekly", "monthly", "quarterly", "yearly", "custom"].map(r => (
           <button key={r} onClick={() => setRange(r)} style={{ background: range === r ? C.blue : "transparent", border: `1px solid ${range === r ? C.blue : C.border}`, color: range === r ? C.white : C.dim, borderRadius: 8, padding: "7px 18px", fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.07em", textTransform: "uppercase" }}>{r}</button>
         ))}
+        {rangeLabel && (
+          <span style={{ fontSize: 12, color: C.dim, marginLeft: 8 }}>{rangeLabel}</span>
+        )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
+      {range === "custom" && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px" }}>
+          <span style={{ fontSize: 11, color: C.dim, letterSpacing: "0.08em", textTransform: "uppercase" }}>From</span>
+          <input type="date" value={customFrom} max={customTo} onChange={e => setCustomFrom(e.target.value)}
+            style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.white, borderRadius: 6, padding: "6px 10px", fontSize: 12, fontFamily: "'Barlow',sans-serif", colorScheme: "dark" }}/>
+          <span style={{ fontSize: 11, color: C.dim, letterSpacing: "0.08em", textTransform: "uppercase" }}>To</span>
+          <input type="date" value={customTo} min={customFrom} max={isoDate(today)} onChange={e => setCustomTo(e.target.value)}
+            style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.white, borderRadius: 6, padding: "6px 10px", fontSize: 12, fontFamily: "'Barlow',sans-serif", colorScheme: "dark" }}/>
+          <button onClick={() => setCustomApplied(v => v + 1)} disabled={!customFrom || !customTo || customFrom > customTo}
+            style={{ background: C.blue, border: "none", color: C.white, borderRadius: 6, padding: "7px 16px", fontSize: 11, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", cursor: "pointer", marginLeft: "auto", opacity: (!customFrom || !customTo || customFrom > customTo) ? 0.5 : 1 }}>
+            Apply
+          </button>
+        </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
         {[
           { label: "Total Logged", val: `${totalHours}h`, color: C.white, sub: "This period" },
+          { label: "Yesterday", val: `${yesterdayHours}h`, color: C.blueLight, sub: "Total logged" },
           { label: "On Target", val: `${logs.filter(t => t.logged).length}/${logs.length}`, color: C.green, sub: "Logged today" },
           { label: "Missing", val: missing.length, color: missing.length ? C.red : C.green, sub: "Need to log" }
         ].map(k => (
@@ -2176,7 +2222,7 @@ export default function Dashboard({ onLogout, currentUser }) {
           {error && <div style={{ color:C.red, padding:20, background:C.red+"11", borderRadius:12, border:`1px solid ${C.red}33` }}>{error}</div>}
           
           {screen==="Overview" && <Overview overview={overview} people={people} tickets={tickets} timeLogs={timeLogs} currentUser={currentUser}/>}
-          {screen==="Time"     && <TimeLogs timeLogs={timeLogs}/>}
+          {screen==="Time"     && <TimeLogs timeLogs={timeLogs} overview={overview}/>}
           {screen==="Tickets"  && <Tickets tickets={tickets} onSelectTicket={setTicket}/>}
           {/* People screen is a cross-team roster — developers don't see it. */}
           {screen==="People" && currentUser?.role !== 'developer' && <People people={people} overview={overview} onSelectPerson={setPerson} onPrepOneOnOne={setOneOnOnePerson}/>}
