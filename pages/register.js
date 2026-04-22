@@ -47,7 +47,40 @@ export default function RegisterPage() {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Phase 7b: one-click approval token flow. When present, skip the name
+  // picker entirely — the candidate is locked by the signed token.
+  const [reqToken, setReqToken] = useState(null);
+  const [tokenError, setTokenError] = useState(null); // 'BAD_TOKEN' | 'ALREADY_REGISTERED'
+
   const pollRef = useRef(null);
+
+  // Phase 7b: if URL has ?req=<token>, pre-fill the wizard from the token.
+  useEffect(() => {
+    if (!router.isReady) return;
+    const token = typeof router.query.req === 'string' ? router.query.req : null;
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/auth/register/candidate-from-token?token=${encodeURIComponent(token)}`);
+        const body = await r.json();
+        if (cancelled) return;
+        if (r.ok && body.candidate) {
+          setCandidate(body.candidate);
+          setEmail(body.candidate.email || '');
+          setReqToken(token);
+          setStep('confirm');
+        } else if (body.error === 'ALREADY_REGISTERED') {
+          setTokenError('ALREADY_REGISTERED');
+        } else {
+          setTokenError('BAD_TOKEN');
+        }
+      } catch {
+        if (!cancelled) setTokenError('BAD_TOKEN');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [router.isReady, router.query.req]);
 
   // Load candidates once.
   useEffect(() => {
@@ -143,6 +176,7 @@ export default function RegisterPage() {
           username,
           password,
           email,
+          ...(reqToken ? { req_token: reqToken } : {}),
         }),
       });
       const body = await r.json();
@@ -328,6 +362,40 @@ export default function RegisterPage() {
   const matchOk = password.length > 0 && password === passwordConfirm;
   const credsOk = usernameOk && passwordOk && matchOk;
 
+  // Phase 7b: full-page error screens for an invalid/expired or
+  // already-registered approval link.
+  if (tokenError) {
+    const isAlready = tokenError === 'ALREADY_REGISTERED';
+    return (
+      <div style={pageWrap}>
+        <div style={{ width: '100%', maxWidth: 460 }}>
+          <div style={{ textAlign: 'center', marginBottom: 30 }}>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', color: C.dimmer, textTransform: 'uppercase', marginBottom: 6 }}>Create Account</div>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: C.white }}>RedMine Dashboard</div>
+          </div>
+          <div style={cardStyle}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.white, marginBottom: 6 }}>
+              {isAlready ? 'Already registered' : 'Link not valid'}
+            </div>
+            <div style={{ fontSize: 12, color: C.dim, marginBottom: 18 }}>
+              {isAlready
+                ? 'This account is already registered. Sign in instead.'
+                : 'This approval link is invalid or expired. Please contact your project manager.'}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button style={btn(true)} onClick={() => router.push('/login')}>Go to sign-in</button>
+              {!isAlready && (
+                <button style={subtleBtn} onClick={() => router.push('/register/request-access')}>
+                  Request access
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={pageWrap}>
       <div style={{ width: '100%', maxWidth: 460 }}>
@@ -432,7 +500,9 @@ export default function RegisterPage() {
               {error && <ErrBox msg={error} />}
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <button style={subtleBtn} onClick={() => { setError(null); setStep('pick'); }}>← Back</button>
+                {!reqToken && (
+                  <button style={subtleBtn} onClick={() => { setError(null); setStep('pick'); }}>← Back</button>
+                )}
                 <button
                   style={btn(!!email && !busy)}
                   disabled={!email || busy}

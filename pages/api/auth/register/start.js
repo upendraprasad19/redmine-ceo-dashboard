@@ -2,6 +2,7 @@
 // Public endpoint (no auth): validate inputs, rate-limit per IP,
 // expire any prior pending row for this user, insert a fresh one,
 // and return { code, expires_at } for the verification step.
+const jwt = require('jsonwebtoken');
 const { getDb } = require('../../../../lib/db');
 const { hashPassword } = require('../../../../lib/auth');
 const { normalizeEmail } = require('../../../../lib/email-utils');
@@ -38,15 +39,37 @@ export default async function handler(req, res) {
     }
 
     const body = req.body || {};
-    // TODO Phase 7: verify signed req_token from access-request approval,
-    // link to access_request.id. For now the token is ignored.
-    const { redmine_user_id, username, password, email } = body;
+    const { redmine_user_id, username, password, email, req_token } = body;
 
     // --- Input validation ---------------------------------------------------
     const redmineUserId = Number(redmine_user_id);
     if (!Number.isInteger(redmineUserId) || redmineUserId <= 0) {
       return sendError(res, 400, 'INVALID_INPUT', 'redmine_user_id must be a positive integer');
     }
+
+    // --- Optional one-click approval token ---------------------------------
+    // If present, verify the signed req_token came from the Redmine sync that
+    // resolved an approved access request. Token only proves approval; all
+    // other checks below still apply.
+    if (req_token !== undefined && req_token !== null && req_token !== '') {
+      if (typeof req_token !== 'string') {
+        return sendError(res, 401, 'BAD_TOKEN', 'Token invalid or expired. Try requesting a new approval email.');
+      }
+      let tokenPayload;
+      try {
+        tokenPayload = jwt.verify(req_token, process.env.JWT_SECRET);
+      } catch (e) {
+        return sendError(res, 401, 'BAD_TOKEN', 'Token invalid or expired. Try requesting a new approval email.');
+      }
+      if (
+        !tokenPayload ||
+        tokenPayload.purpose !== 'complete_registration' ||
+        tokenPayload.redmine_user_id !== redmineUserId
+      ) {
+        return sendError(res, 401, 'BAD_TOKEN', 'Token invalid or expired. Try requesting a new approval email.');
+      }
+    }
+
     if (typeof username !== 'string' || username.length < 3 || username.length > 32 || !USERNAME_RE.test(username)) {
       return sendError(
         res,
