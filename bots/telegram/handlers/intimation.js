@@ -176,8 +176,35 @@ async function handleIntimationCallback(ctx, botUser) {
 
     if (parts[1] === 'commit_extend') {
       const commitment_id = Number(parts[2]);
-      await markCommitment(commitment_id, 'missed');
-      await ctx.editMessageText('Noted — I\'ll let the originator know you need more time.').catch(() => {});
+      // Keep status as 'followed_up' — the commitment is still open, dev is working on it.
+      // Notify the originator of the source thread that the dev needs more time.
+      const commitRow = await sql`
+        SELECT c.id, c.thread_id, c.user_id, c.promise_text,
+               u.display_name AS dev_name,
+               t.originator_id, orig.telegram_id AS originator_tg,
+               i.redmine_id
+          FROM commitments c
+          JOIN dashboard_users u ON u.id = c.user_id
+          LEFT JOIN bot_threads t ON t.id = c.thread_id
+          LEFT JOIN dashboard_users orig ON orig.id = t.originator_id
+          LEFT JOIN issues i ON i.id = c.issue_id
+         WHERE c.id = ${commitment_id} LIMIT 1
+      `;
+      const cr = commitRow[0];
+      if (cr && cr.originator_tg && cr.redmine_id) {
+        try {
+          const { relayResponse } = require('../../../lib/intimation-relay');
+          await relayResponse({
+            thread: { redmine_id: cr.redmine_id, target_display_name: cr.dev_name },
+            originator: { telegram_id: cr.originator_tg },
+            cc: null,
+            responseText: `Needs more time on '${cr.promise_text}'. Will update when done.`,
+          });
+        } catch (e) {
+          console.error('commit_extend originator notify failed:', e.message);
+        }
+      }
+      await ctx.editMessageText('Noted — the originator has been told you need more time.').catch(() => {});
       await ctx.answerCbQuery();
       return true;
     }

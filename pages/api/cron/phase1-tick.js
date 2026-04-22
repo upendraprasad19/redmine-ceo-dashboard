@@ -7,9 +7,14 @@
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end();
 
-  const secret = req.headers['x-cron-secret'] || req.query.secret;
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return res.status(500).json({ error: 'CRON_SECRET not configured' });
+  }
+
+  const secret = req.headers['x-cron-secret'];
   const bearer = req.headers.authorization ? req.headers.authorization.replace('Bearer ', '') : null;
-  if (secret !== process.env.CRON_SECRET && bearer !== process.env.CRON_SECRET) {
+  if (secret !== cronSecret && bearer !== cronSecret) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
