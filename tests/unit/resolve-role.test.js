@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-
-const { resolveRole } = require('../../lib/roles.js');
+import { resolveRole } from '../../lib/roles.js';
 
 describe('resolveRole', () => {
   let originalManagerUsernames;

@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS pending_registrations (
   id                     SERIAL PRIMARY KEY,
   code                   TEXT UNIQUE NOT NULL,
-  linked_redmine_user_id INTEGER NOT NULL REFERENCES users(id),
+  linked_redmine_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   username               TEXT NOT NULL,
   password_hash          TEXT NOT NULL,
   email                  TEXT NOT NULL,
@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
 );
 CREATE INDEX IF NOT EXISTS idx_pending_registrations_status ON pending_registrations (status);
 CREATE INDEX IF NOT EXISTS idx_pending_registrations_expires_at ON pending_registrations (expires_at);
+-- Only one live pending registration per email or per Redmine user; completed / expired rows don't block re-attempts
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_registrations_active_email
+  ON pending_registrations (LOWER(email)) WHERE status = 'awaiting_verification';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_registrations_active_redmine
+  ON pending_registrations (linked_redmine_user_id) WHERE status = 'awaiting_verification';
 
 CREATE TABLE IF NOT EXISTS access_requests (
   id           SERIAL PRIMARY KEY,
@@ -32,7 +37,7 @@ CREATE TABLE IF NOT EXISTS access_requests (
   message      TEXT,
   status       TEXT NOT NULL DEFAULT 'pending'
                CHECK (status IN ('pending','approved','rejected','resolved')),
-  reviewed_by  INTEGER REFERENCES dashboard_users(id),
+  reviewed_by  INTEGER REFERENCES dashboard_users(id) ON DELETE SET NULL,
   reviewed_at  TIMESTAMPTZ,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
