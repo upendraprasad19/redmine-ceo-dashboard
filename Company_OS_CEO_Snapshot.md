@@ -58,6 +58,14 @@
 - Strictly scoped — they only see their own data
 - Blocker reporting: one button in Slack → team lead gets notified on Telegram instantly
 
+### 6. Intimation Relay (Telegram — shipped Apr 2026)
+
+- From the manager's or team lead's phone: "ask Ravi about TK-1234" → two-tap Yes/Cancel card → the developer gets a Telegram message with Acknowledge / Working on it / Blocked buttons
+- Developer replies (button or free text) are relayed to the originator instantly; the developer's team lead is silently CC'd so nothing happens behind their back
+- Commitment tracking: if the developer writes "will close by EOD", the system remembers — and at EOD asks "Is it done?" with a one-tap response
+- Auto-escalation: 4-hour gentle nudge, 24-hour close with escalate/close buttons for the originator
+- Developer consent gate: every developer agrees once (`/agree`) before relay activates; they can revoke any time (`/revoke`)
+
 ---
 
 ## Architecture

@@ -56,6 +56,72 @@ UPSTASH REDIS (Session cache — last 10 messages per user)
 
 ---
 
+## INTIMATION RELAY (Phase 1 — shipped Apr 2026)
+
+Cross-user Telegram relay that lets a manager or team lead intimate a developer
+about a Redmine ticket in two taps. The developer responds on their own
+Telegram (button or free text), and the response relays back to the originator
+automatically. Commitments in free-text replies ("will close by EOD") are
+extracted and followed up at the committed time.
+
+**What was built**
+- **Flow:** Manager/TL says "ask Ravi about TK-1234" → bot calls the
+  `propose_intimation` AI tool → bot intercepts the tool result and renders a
+  Yes/Cancel card → on Yes, a `bot_threads` row is created and the developer
+  receives the message with `[Acknowledge]` `[Working on it]` `[Blocked]`
+  buttons → developer response (button or text) is logged as a
+  `bot_thread_events` row and relayed to the originator (and CC'd TL when
+  manager→dev).
+- **Permission matrix (Phase 1):** manager → developer (any team); team_lead →
+  developer (own team only); everything else denied. Enforced in
+  `propose_intimation`.
+- **Timeouts:** 4h no-response → gentle nudge to the developer; 24h → thread
+  closes as `no_response` and originator is notified with `[Escalate to TL]`
+  `[Close]` buttons.
+- **Commitments:** AI extracts `(promise_text, due_at)` from dev replies. At
+  `due_at` the dev is DM'd `[Yes, done]` / `[Needs more time]`. "Needs more
+  time" notifies the originator.
+- **Developer consent gate:** developers get a one-time consent screen on
+  `/start`; must reply `/agree` before relay activates. `/revoke` removes
+  consent at any time.
+- **Personalization data foundations (for future Phases 2–4):** every
+  `chat_history` row now stores `role_at_time` synchronously and the
+  `chat-enrichment` cron tags `intent` + `entities` (tickets, users, projects)
+  every 15 min via AI classification. Nothing consumes this data in Phase 1; it
+  is the pipeline that Phases 2–4 will read from.
+
+**New DB tables (migration 019)**
+- `bot_threads` — relay threads with status (`sent | acked | replied |
+  timeout_nudged | no_response | closed`) and optional CC'd TL.
+- `bot_thread_events` — append-only event log (`sent`, `button_reply`,
+  `text_reply`, `nudged`, `closed`, `relayed_to_originator`).
+- `commitments` — extracted commitments with `due_at` and `status` (`pending |
+  kept | missed | followed_up`).
+- Plus columns: `dashboard_users.consent_given_at`, and
+  `chat_history.intent / entities / role_at_time / enriched_at`.
+
+**Callback-data convention (`int:*` namespace)**
+`int:confirm:<target_id>:<issue_id>`, `int:cancel`, `int:ack|working|blocked:<thread_id>`,
+`int:escalate|close:<thread_id>`, `int:commit_done|commit_extend:<commitment_id>`.
+
+**Cron**
+A single Vercel cron at `/api/cron/phase1-tick` runs every 15 minutes and
+dispatches three jobs: `intimation-followup` (nudges + closes),
+`commitment-followup` (due-time DMs), `chat-enrichment` (batch classifier, 50
+rows/run).
+
+**Reference**
+Full design: `docs/superpowers/specs/2026-04-22-intimation-relay-design.md`.
+Executed implementation plan: `docs/superpowers/plans/2026-04-22-intimation-relay.md`.
+
+**Phase roadmap**
+- **Phase 1 (shipped):** intimation relay + commitment capture + personalization data pipeline.
+- **Phase 2 (planned):** passive profile learning + training flywheel (ideas A, E).
+- **Phase 3 (planned):** active personalization signals — pattern detection, proactive sends (idea B).
+- **Phase 4 (planned):** cross-user intelligence for managers (idea C).
+
+---
+
 ## TECH STACK
 
 ```bash
