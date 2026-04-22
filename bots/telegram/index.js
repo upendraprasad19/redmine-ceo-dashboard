@@ -12,6 +12,9 @@ const { tools } = require('../../lib/gpt-tools');
 const { executeToolCall } = require('../../lib/gpt-executor');
 const { buildSystemPrompt } = require('./prompt');
 const { startOnboarding, handleOnboardingCallback, handleOnboardingText } = require('./onboarding');
+const { handleIntimationCallback } = require('./handlers/intimation');
+const { getOpenThreadForTarget, logEvent, transitionStatus, relayResponse } = require('../../lib/intimation-relay');
+const { extractCommitment, createCommitment } = require('../../lib/commitments');
 
 // ── Initialize bot ──
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
@@ -82,6 +85,14 @@ bot.on('callback_query', async (ctx) => {
   const user = ctx.botUser;
   if (!user) return ctx.answerCbQuery('Not registered');
   try {
+    // Intimation callbacks (prefix 'int:') take priority over onboarding
+    try {
+      const intHandled = await handleIntimationCallback(ctx, user);
+      if (intHandled) return;
+    } catch (e) {
+      console.error('Intimation callback error:', e.message);
+    }
+
     const handled = await handleOnboardingCallback(ctx, user);
     if (!handled) await ctx.answerCbQuery();
   } catch (e) {
@@ -198,6 +209,68 @@ bot.on('text', async (ctx) => {
     console.error('Onboarding text check error:', e.message);
   }
 
+  // Thread continuation: if this user is a developer with an open thread and sends free text,
+  // treat it as a reply on that thread (provided last activity was within 2 hours).
+  if (user.role === 'developer') {
+    try {
+      const sql = require('../../lib/db').getDb();
+      const open = await getOpenThreadForTarget(user.id);
+      if (open) {
+        const lastMs = new Date(open.last_event_at).getTime();
+        if (Date.now() - lastMs <= 2 * 60 * 60 * 1000) {
+          const text = ctx.message.text;
+          await logEvent({
+            thread_id: open.id,
+            actor_id: user.id,
+            event_type: 'text_reply',
+            payload: { text },
+          });
+          await transitionStatus(open.id, 'replied');
+
+          // Extract commitment (best-effort)
+          try {
+            const commit = await extractCommitment({ text, now: new Date() });
+            if (commit) {
+              await createCommitment({
+                thread_id: open.id,
+                user_id: user.id,
+                issue_id: open.issue_id,
+                promise_text: commit.promise_text,
+                due_at: commit.due_at,
+              });
+            }
+          } catch (e) { console.error('commit extract in thread reply:', e.message); }
+
+          const originatorRows = await sql`
+            SELECT id, display_name, telegram_id FROM dashboard_users WHERE id = ${open.originator_id} LIMIT 1
+          `;
+          const ccRows = open.cc_user_id ? await sql`
+            SELECT id, display_name, telegram_id FROM dashboard_users WHERE id = ${open.cc_user_id} LIMIT 1
+          ` : [];
+          const issueRows = await sql`SELECT redmine_id FROM issues WHERE id = ${open.issue_id} LIMIT 1`;
+
+          await relayResponse({
+            thread: { redmine_id: issueRows[0]?.redmine_id, target_display_name: user.display_name || user.username },
+            originator: originatorRows[0],
+            cc: ccRows[0] || null,
+            responseText: text,
+          });
+          await logEvent({
+            thread_id: open.id,
+            actor_id: user.id,
+            event_type: 'relayed_to_originator',
+            payload: { text_preview: text.slice(0, 100) },
+          });
+
+          await ctx.reply('✓ Relayed your reply to the originator.');
+          return; // stop: don't run AI pipeline
+        }
+      }
+    } catch (e) {
+      console.error('thread continuation check error:', e.message);
+    }
+  }
+
   const message = ctx.message.text;
 
   // Show "typing" indicator
@@ -253,6 +326,42 @@ bot.on('text', async (ctx) => {
           linked_redmine_user_id: user.linked_redmine_user_id,
         });
 
+        // Intercept propose_intimation confirmations: bot renders the preview card itself.
+        if (tc.function.name === 'propose_intimation') {
+          try {
+            const parsed = JSON.parse(result);
+            if (parsed.confirm_required && parsed.preview) {
+              const p = parsed.preview;
+              const overdueBit = (p.days_overdue && p.days_overdue > 0) ? ` (overdue ${p.days_overdue}d)` : '';
+              const noteBit = p.note ? `\n\n_${p.note}_` : '';
+              const text = `Send this to *${p.target_display_name}*?\n\n[TK-${p.issue_redmine_id}](https://redmine.thinkingcode.com/issues/${p.issue_redmine_id}) '${p.issue_subject}'${overdueBit}.${noteBit}`;
+              await ctx.reply(text, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [[
+                    { text: 'Yes, send', callback_data: `int:confirm:${p.target_user_id}:${p.issue_id}` },
+                    { text: 'Cancel', callback_data: 'int:cancel' },
+                  ]],
+                },
+              });
+              try { await saveMessage(user.id, 'user', message); } catch (e) { /* ignore */ }
+              return;
+            }
+            if (parsed.ambiguous && Array.isArray(parsed.candidates)) {
+              const lines = parsed.candidates.map((c, i) => `${i + 1}. ${c.display_name} (${c.team || '—'})`).join('\n');
+              await ctx.reply(`Multiple matches — which one?\n${lines}\n\n_Reply with the name_`);
+              return;
+            }
+            if (parsed.error) {
+              await ctx.reply(parsed.error);
+              return;
+            }
+          } catch (e) {
+            console.error('propose_intimation intercept parse error:', e.message);
+            // fall through — let AI handle the result normally
+          }
+        }
+
         messages.push({
           role: 'tool',
           tool_call_id: tc.id,
@@ -295,12 +404,12 @@ bot.on('text', async (ctx) => {
     try {
       const sql = getDb();
       await sql`
-        INSERT INTO chat_history (user_id, role, content, metadata, created_at)
-        VALUES (${user.id}, 'user', ${message}, ${JSON.stringify({ source: 'telegram', telegram_id: String(ctx.from.id) })}, NOW())
+        INSERT INTO chat_history (user_id, role, content, metadata, role_at_time, created_at)
+        VALUES (${user.id}, 'user', ${message}, ${JSON.stringify({ source: 'telegram', telegram_id: String(ctx.from.id) })}, ${user.role}, NOW())
       `;
       await sql`
-        INSERT INTO chat_history (user_id, role, content, metadata, created_at)
-        VALUES (${user.id}, 'assistant', ${replyText}, ${JSON.stringify({ source: 'telegram', tool_rounds: toolRounds })}, NOW())
+        INSERT INTO chat_history (user_id, role, content, metadata, role_at_time, created_at)
+        VALUES (${user.id}, 'assistant', ${replyText}, ${JSON.stringify({ source: 'telegram', tool_rounds: toolRounds })}, ${user.role}, NOW())
       `;
     } catch (e) {
       console.error('DB chat_history insert error:', e.message);
