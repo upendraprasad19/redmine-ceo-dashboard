@@ -5,6 +5,7 @@
  */
 
 import { getDb } from '../../../lib/db';
+import { sendTelegramMessage } from '../../../lib/telegram';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
@@ -58,7 +59,7 @@ export default async function handler(req, res) {
     let sent = 0;
     for (const m of managers) {
       try {
-        await sendTelegramMessage(TELEGRAM_TOKEN, m.telegram_id, msg);
+        await sendTelegramMessage(m.telegram_id, msg);
         sent++;
       } catch (e) {
         console.error(`Friday summary failed for ${m.display_name}:`, e.message);
@@ -72,12 +73,3 @@ export default async function handler(req, res) {
   }
 }
 
-async function sendTelegramMessage(token, chatId, text) {
-  const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown', disable_web_page_preview: true }),
-  });
-  const data = await r.json();
-  if (!data.ok) throw new Error(data.description);
-}

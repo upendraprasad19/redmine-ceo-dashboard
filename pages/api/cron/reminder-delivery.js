@@ -5,6 +5,7 @@
  */
 
 import { getDb } from '../../../lib/db';
+import { sendTelegramMessage } from '../../../lib/telegram';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
     let sent = 0;
     for (const reminder of due) {
       try {
-        await sendTelegramMessage(TELEGRAM_TOKEN, reminder.telegram_id, `⏰ *Reminder*\n\n${reminder.message}`);
+        await sendTelegramMessage(reminder.telegram_id, `⏰ *Reminder*\n\n${reminder.message}`);
         await sql`UPDATE user_reminders SET sent = true WHERE id = ${reminder.id}`;
         sent++;
       } catch (e) {
@@ -42,12 +43,3 @@ export default async function handler(req, res) {
   }
 }
 
-async function sendTelegramMessage(token, chatId, text) {
-  const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
-  });
-  const data = await r.json();
-  if (!data.ok) throw new Error(data.description);
-}

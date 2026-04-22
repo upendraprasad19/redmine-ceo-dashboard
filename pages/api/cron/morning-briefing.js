@@ -6,6 +6,7 @@
  */
 
 import { getDb } from '../../../lib/db';
+import { sendTelegramMessage } from '../../../lib/telegram';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
@@ -53,7 +54,7 @@ export default async function handler(req, res) {
         }
 
         const briefingText = await buildBriefing(sql, user, profile);
-        await sendTelegramMessage(TELEGRAM_TOKEN, user.telegram_id, briefingText);
+        await sendTelegramMessage(user.telegram_id, briefingText);
         sent++;
       } catch (err) {
         errors.push({ user: user.username, error: err.message });
@@ -134,12 +135,3 @@ async function buildBriefing(sql, user, profile) {
   return lines.join('\n');
 }
 
-async function sendTelegramMessage(token, chatId, text) {
-  const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown', disable_web_page_preview: true }),
-  });
-  const data = await r.json();
-  if (!data.ok) throw new Error(`Telegram error: ${data.description}`);
-}

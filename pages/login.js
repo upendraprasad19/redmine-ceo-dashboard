@@ -223,6 +223,14 @@ export default function LoginPage() {
                 </span>
               ) : "Access Dashboard"}
             </button>
+
+            <div style={{ textAlign: "center", marginTop: 14 }}>
+              <a href="/forgot-password" style={{ fontSize: 11, color: C.dim, textDecoration: "none" }}
+                 onMouseEnter={e => e.currentTarget.style.color = C.white}
+                 onMouseLeave={e => e.currentTarget.style.color = C.dim}>
+                Forgot password?
+              </a>
+            </div>
           </form>
         </div>
 

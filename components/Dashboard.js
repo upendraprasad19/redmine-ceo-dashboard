@@ -5,6 +5,7 @@ import OneOnOnePrep from "./OneOnOnePrep";
 import EscalationChain from "./EscalationChain";
 import TeamHealth from "./TeamHealth";
 import TeamCompare from "./TeamCompare";
+import ProfilePanel from "./ProfilePanel";
 
 const C = {
   bg:       "#030B15",
@@ -2003,6 +2004,7 @@ export default function Dashboard({ onLogout, currentUser }) {
   const [error, setError]     = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [oneOnOnePerson, setOneOnOnePerson] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const fetchingRef = React.useRef(false);
 
   // Fetch all data
@@ -2088,7 +2090,13 @@ export default function Dashboard({ onLogout, currentUser }) {
         {/* ── USER INFO + LOGOUT ── */}
         <div style={{ padding:"16px 12px", borderTop:`1px solid ${C.border}` }}>
           {currentUser && (
-            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"0 4px", marginBottom:10 }}>
+            <button
+              onClick={()=>setProfileOpen(true)}
+              style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 6px", marginBottom:10, width:"100%", background:"transparent", border:"none", borderRadius:8, cursor:"pointer", textAlign:"left", transition:"background .15s" }}
+              onMouseEnter={e=>{ e.currentTarget.style.background="rgba(255,255,255,0.04)"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
+              title="Open profile"
+            >
               <div style={{ width:30, height:30, borderRadius:"50%", background:C.card, border:`1px solid ${C.borderHi}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:C.blueLight, fontFamily:"'Barlow Condensed',sans-serif", flexShrink:0 }}>
                 {(currentUser.display_name || currentUser.username || "U").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}
               </div>
@@ -2096,7 +2104,7 @@ export default function Dashboard({ onLogout, currentUser }) {
                 <div style={{ fontSize:12, fontWeight:600, color:C.white, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{currentUser.display_name || currentUser.username}</div>
                 <div style={{ fontSize:10, color:C.dimmer, marginTop:1, textTransform:"capitalize" }}>{currentUser.role?.replace("_"," ")}{currentUser.team ? ` · ${currentUser.team}` : ""}</div>
               </div>
-            </div>
+            </button>
           )}
           <div style={{ fontSize:11, color:C.dimmer, marginBottom:8, paddingLeft:4 }}>{new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}</div>
           <button onClick={onLogout} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 14px", borderRadius:10, border:`1px solid ${C.border}`, background:"transparent", color:C.dim, fontSize:12, fontWeight:600, cursor:"pointer", transition:"all .15s", fontFamily:"'Barlow',sans-serif" }}
@@ -2167,6 +2175,7 @@ export default function Dashboard({ onLogout, currentUser }) {
       <PersonModal person={person} onClose={()=>setPerson(null)}/>
       <TicketModal ticket={ticket} onClose={()=>setTicket(null)}/>
       <OneOnOnePrep person={oneOnOnePerson} onClose={()=>setOneOnOnePerson(null)}/>
+      <ProfilePanel open={profileOpen} onClose={()=>setProfileOpen(false)} onLogout={onLogout}/>
     </div>
   );
 }

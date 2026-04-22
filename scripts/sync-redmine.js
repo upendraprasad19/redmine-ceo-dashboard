@@ -7,6 +7,8 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 import { neon } from '@neondatabase/serverless';
+import emailUtils from '../lib/email-utils.js';
+const { normalizeEmail } = emailUtils;
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -89,7 +91,7 @@ async function syncUsers() {
       const name = `${u.firstname || ''} ${u.lastname || ''}`.trim();
       const res = await sql`
         INSERT INTO users (redmine_id, name, email, initials, active)
-        VALUES (${u.id}, ${name}, ${u.mail || null}, ${initials}, true)
+        VALUES (${u.id}, ${name}, ${normalizeEmail(u.mail) || null}, ${initials}, true)
         ON CONFLICT (redmine_id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, updated_at = NOW()
         RETURNING id
       `;

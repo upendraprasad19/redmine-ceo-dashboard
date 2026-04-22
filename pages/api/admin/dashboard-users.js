@@ -43,10 +43,17 @@ export default async function handler(req, res) {
 
       const password_hash = await hashPassword(password);
 
+      // If linked to a Redmine user, copy their email over so profile + forgot-password flow has it.
+      let linkedEmail = null;
+      if (linked_redmine_user_id) {
+        const u = await sql`SELECT email FROM users WHERE id = ${linked_redmine_user_id} LIMIT 1`;
+        linkedEmail = u[0]?.email || null;
+      }
+
       const result = await sql`
-        INSERT INTO dashboard_users (username, password_hash, display_name, role, team, telegram_id, linked_redmine_user_id, active, created_at)
-        VALUES (${username}, ${password_hash}, ${display_name}, ${role || 'team_lead'}, ${team || null}, ${telegram_id || null}, ${linked_redmine_user_id || null}, true, NOW())
-        RETURNING id, username, display_name, role, team, telegram_id, active
+        INSERT INTO dashboard_users (username, password_hash, display_name, role, team, telegram_id, linked_redmine_user_id, email, active, created_at)
+        VALUES (${username}, ${password_hash}, ${display_name}, ${role || 'team_lead'}, ${team || null}, ${telegram_id || null}, ${linked_redmine_user_id || null}, ${linkedEmail}, true, NOW())
+        RETURNING id, username, display_name, role, team, telegram_id, email, active
       `;
 
       return res.status(201).json({ user: result[0] });
