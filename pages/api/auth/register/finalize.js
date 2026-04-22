@@ -108,11 +108,12 @@ export default async function handler(req, res) {
       inserted = await sql`
         INSERT INTO dashboard_users (
           username, password_hash, display_name, role, team,
-          linked_redmine_user_id, telegram_id, active
+          linked_redmine_user_id, telegram_id, email, active
         ) VALUES (
           ${row.username}, ${row.password_hash}, ${row.name}, ${role}, ${row.team || null},
           ${row.linked_redmine_user_id},
           ${telegramId},
+          ${row.email},
           true
         )
         RETURNING id, username, display_name, role, team
