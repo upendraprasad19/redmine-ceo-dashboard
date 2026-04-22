@@ -10,7 +10,7 @@ const mockSql = vi.fn();
 vi.spyOn(dbModule, 'getDb').mockImplementation(() => mockSql);
 
 // Import the module under test
-import { createThread, logEvent, transitionStatus, getOpenThreadForTarget } from '../../lib/intimation-relay.js';
+import { createThread, logEvent, transitionStatus, getOpenThreadForTarget, canIntimate } from '../../lib/intimation-relay.js';
 
 describe('createThread', () => {
   beforeEach(() => {
@@ -83,5 +83,39 @@ describe('getOpenThreadForTarget', () => {
     mockSql.mockResolvedValueOnce([]);
     const t = await getOpenThreadForTarget(5);
     expect(t).toBeNull();
+  });
+});
+
+describe('canIntimate', () => {
+  it('manager can intimate a developer on any team', () => {
+    const from = { role: 'manager', team: 'Alpha' };
+    const to   = { role: 'developer', team: 'Beta' };
+    expect(canIntimate(from, to).allowed).toBe(true);
+  });
+
+  it('TL can intimate a developer on their own team', () => {
+    const from = { role: 'team_lead', team: 'Alpha' };
+    const to   = { role: 'developer', team: 'Alpha' };
+    expect(canIntimate(from, to).allowed).toBe(true);
+  });
+
+  it('TL cannot intimate a developer on a different team', () => {
+    const from = { role: 'team_lead', team: 'Alpha' };
+    const to   = { role: 'developer', team: 'Beta' };
+    const r = canIntimate(from, to);
+    expect(r.allowed).toBe(false);
+    expect(r.reason).toMatch(/own team/i);
+  });
+
+  it('TL cannot intimate another TL (Phase 2)', () => {
+    const from = { role: 'team_lead', team: 'Alpha' };
+    const to   = { role: 'team_lead', team: 'Alpha' };
+    expect(canIntimate(from, to).allowed).toBe(false);
+  });
+
+  it('developer cannot initiate intimation', () => {
+    const from = { role: 'developer', team: 'Alpha' };
+    const to   = { role: 'developer', team: 'Alpha' };
+    expect(canIntimate(from, to).allowed).toBe(false);
   });
 });
