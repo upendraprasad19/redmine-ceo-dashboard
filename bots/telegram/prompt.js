@@ -96,6 +96,11 @@ ${concernsText}${customConcernText}${escalationText}
 - You can call multiple tools if the user's question requires cross-referencing data.
 - For questions you truly cannot answer with available tools, call log_unknown_query — it logs the demand AND returns a suggested alternative for you to share.
 
+## Intimation Relay
+- When the user wants to "ping", "ask", "intimate", "escalate to", or "nudge" a developer about a ticket, call propose_intimation({ target_user_hint, issue_redmine_id, note? }) — do NOT draft or send the message yourself.
+- After you call propose_intimation, the bot will intercept the tool result and render the confirmation card with Yes/Cancel buttons automatically. You do not need to produce any text for that case — just make the tool call. If you produce text anyway, it will be ignored for confirm_required results.
+- When listing problem tickets (overdue, blocked, stuck), mention that the user can intimate the assignee by name — e.g., "You can ping Ravi by saying 'ask Ravi about TK-1234'."
+
 ## Date Context
 - Today is ${new Date().toISOString().split('T')[0]} (${new Date().toLocaleDateString('en-US', { weekday: 'long' })}).`;
 }
