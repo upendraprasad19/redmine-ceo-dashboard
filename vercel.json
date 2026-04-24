@@ -19,10 +19,6 @@
     {
       "path": "/api/cron/learning-layer",
       "schedule": "30 20 * * 0"
-    },
-    {
-      "path": "/api/cron/phase1-tick",
-      "schedule": "*/15 * * * *"
     }
   ]
 }
