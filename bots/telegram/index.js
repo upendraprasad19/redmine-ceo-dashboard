@@ -22,11 +22,99 @@ const { extractCommitment, createCommitment } = require('../../lib/commitments')
 // ── Initialize bot ──
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
+/**
+ * Handle `/verify <code>` for self-registration.
+ * Runs BEFORE the auth middleware rejects unregistered senders, because
+ * brand-new users completing the Telegram channel step aren't in
+ * dashboard_users yet. Returns true if the command was handled (caller
+ * should stop further processing).
+ */
+async function handleVerifyCommand(ctx) {
+  const text = ctx.message?.text || '';
+  const parts = text.trim().split(/\s+/);
+  const code = parts[1];
+
+  if (!code || !/^[0-9a-f]{32}$/.test(code)) {
+    await ctx.reply('Usage: /verify <code>. The 32-character code is shown on the registration page.');
+    return true;
+  }
+
+  try {
+    const sql = getDb();
+    const telegramId = String(ctx.from.id);
+
+    const rows = await sql`
+      SELECT id, expires_at, status FROM pending_registrations WHERE code = ${code}
+    `;
+    if (rows.length === 0) {
+      await ctx.reply("That code doesn't match an active registration. Double-check the code on the website.");
+      return true;
+    }
+    const pending = rows[0];
+
+    if (new Date(pending.expires_at) < new Date() || pending.status !== 'awaiting_verification') {
+      await ctx.reply('That registration has already finished or expired. Start again on the website.');
+      return true;
+    }
+
+    const existingUser = await sql`
+      SELECT 1 FROM dashboard_users WHERE telegram_id = ${telegramId} LIMIT 1
+    `;
+    if (existingUser.length > 0) {
+      await ctx.reply("This Telegram account is already linked to a dashboard user. You can't use it for a new registration.");
+      return true;
+    }
+
+    const otherPending = await sql`
+      SELECT 1 FROM pending_registrations
+      WHERE telegram_id = ${telegramId}
+        AND status = 'awaiting_verification'
+        AND id != ${pending.id}
+      LIMIT 1
+    `;
+    if (otherPending.length > 0) {
+      await ctx.reply('This Telegram account is mid-registration for someone else. Finish or expire that one first.');
+      return true;
+    }
+
+    const updated = await sql`
+      UPDATE pending_registrations
+      SET telegram_id = ${telegramId},
+          telegram_verified_at = NOW(),
+          verified_channel = 'telegram',
+          status = 'ready'
+      WHERE id = ${pending.id}
+        AND status = 'awaiting_verification'
+        AND expires_at > NOW()
+      RETURNING id
+    `;
+    if (updated.length === 0) {
+      await ctx.reply('Registration state changed while processing. Please refresh the website.');
+      return true;
+    }
+
+    await ctx.reply('✅ Telegram verified. Return to the registration page to finish.');
+    return true;
+  } catch (err) {
+    console.error('/verify command error:', err);
+    try { await ctx.reply('Something went wrong. Please try again.'); } catch (_) { /* ignore */ }
+    return true;
+  }
+}
+
 // ── Auth middleware: match telegram_id to dashboard_users ──
 bot.use(async (ctx, next) => {
   // Only process messages with a sender
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
+
+  // /verify runs BEFORE the auth check so brand-new users can complete
+  // the Telegram step of self-registration without being in dashboard_users.
+  const text = ctx.message?.text || '';
+  if (text.startsWith('/verify')) {
+    await handleVerifyCommand(ctx);
+    return;
+  }
 
   try {
     const sql = getDb();
@@ -38,10 +126,15 @@ bot.use(async (ctx, next) => {
     `;
 
     if (users.length === 0) {
+      const baseUrl = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || '';
+      const registerUrl = baseUrl ? `${baseUrl.replace(/\/$/, '')}/register` : '/register';
       return ctx.reply(
-        `❌ You are not registered in the Company OS dashboard.\n\n` +
-        `Share this with your admin to get access:\n` +
-        `Your Telegram ID: \`${telegramId}\``
+        `👋 This is the ThinkingCode Dashboard bot.\n\n` +
+        `To register for dashboard access:\n` +
+        `1. Visit: ${registerUrl}\n` +
+        `2. Pick your name and set a password.\n` +
+        `3. When asked, send the /verify command I'll show you there.\n\n` +
+        `If you already have an account, this bot will work once the admin links your Telegram.`
       );
     }
 

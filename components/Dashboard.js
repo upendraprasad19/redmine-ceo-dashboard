@@ -6,6 +6,7 @@ import EscalationChain from "./EscalationChain";
 import TeamHealth from "./TeamHealth";
 import TeamCompare from "./TeamCompare";
 import ProfilePanel from "./ProfilePanel";
+import { checkAccess } from "../lib/roles";
 
 const C = {
   bg:       "#030B15",
@@ -555,22 +556,29 @@ function Overview({ overview={}, people=[], tickets=[], timeLogs=[], currentUser
       </div>
       {showNoTimeLog && <NoTimeLogModal onClose={()=>setShowNoTimeLog(false)}/>}
 
-      {/* ── EXECUTIVE SNAPSHOT + WORKLOAD (4-col) ── */}
-      <div>
-        <div style={{ fontSize:11, letterSpacing:"0.12em", color:C.dimmer, textTransform:"uppercase", fontWeight:600, marginBottom:14 }}>Executive Snapshot — Active Tickets</div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:16 }}>
-          <ExecSnapshotBlock title="By Manager" rows={execSnapshot?.managers||[]}/>
-          <ExecSnapshotBlock title="By Project" rows={execSnapshot?.projects||[]}/>
-          <ExecSnapshotBlock title="By Developer" rows={execSnapshot?.developers||[]}/>
-          <WorkloadByTeam workload={workload} memberHours={overview.memberHours || []} compact/>
+      {/* ── EXECUTIVE SNAPSHOT + WORKLOAD (4-col) ──
+          Cross-manager/cross-project/cross-developer aggregate view. Hidden for
+          developers — they only need a view of their own tickets (shown in the
+          Tickets screen, server-side scoped to assignee_id). */}
+      {currentUser?.role !== 'developer' && (
+        <div>
+          <div style={{ fontSize:11, letterSpacing:"0.12em", color:C.dimmer, textTransform:"uppercase", fontWeight:600, marginBottom:14 }}>Executive Snapshot — Active Tickets</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:16 }}>
+            <ExecSnapshotBlock title="By Manager" rows={execSnapshot?.managers||[]}/>
+            <ExecSnapshotBlock title="By Project" rows={execSnapshot?.projects||[]}/>
+            <ExecSnapshotBlock title="By Developer" rows={execSnapshot?.developers||[]}/>
+            <WorkloadByTeam workload={workload} memberHours={overview.memberHours || []} compact/>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* ── TEAM HEALTH BADGES ── */}
-      <TeamHealth currentUser={currentUser}/>
+      {/* ── TEAM HEALTH BADGES ──
+          Team-wide health scoring — not relevant to an individual contributor. */}
+      {currentUser?.role !== 'developer' && <TeamHealth currentUser={currentUser}/>}
 
-      {/* ── ESCALATION CHAIN ── */}
-      <EscalationChain currentUser={currentUser}/>
+      {/* ── ESCALATION CHAIN ──
+          Leadership/escalation routing — team lead + manager tool only. */}
+      {currentUser?.role !== 'developer' && <EscalationChain currentUser={currentUser}/>}
     </div>
   );
 }
@@ -2120,7 +2128,12 @@ export default function Dashboard({ onLogout, currentUser }) {
         </div>
         <Divider/>
         <nav style={{ padding:"16px 12px", display:"flex", flexDirection:"column", gap:4, flex:1 }}>
-          {NAV_ITEMS.map(item=>{
+          {/* Developers don't get Admin nav (they have no canAccessAdmin). People is the team-wide roster — hide for developers too. */}
+          {NAV_ITEMS.filter(item => {
+            if (item === "Admin" && !checkAccess(currentUser, 'admin')) return false;
+            if (item === "People" && currentUser?.role === 'developer') return false;
+            return true;
+          }).map(item=>{
             const active = screen===item;
             return (
               <button key={item} onClick={()=>setScreen(item)} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px", borderRadius:10, border:"none", cursor:"pointer", background:active?"rgba(26,110,245,0.15)":"transparent", color:active?C.blue:C.dim, fontSize:13, fontWeight:600, letterSpacing:"0.01em", transition:"all .15s", textAlign:"left", width:"100%" }}
@@ -2211,8 +2224,10 @@ export default function Dashboard({ onLogout, currentUser }) {
           {screen==="Overview" && <Overview overview={overview} people={people} tickets={tickets} timeLogs={timeLogs} currentUser={currentUser}/>}
           {screen==="Time"     && <TimeLogs timeLogs={timeLogs} overview={overview}/>}
           {screen==="Tickets"  && <Tickets tickets={tickets} onSelectTicket={setTicket}/>}
-          {screen==="People"   && <People people={people} overview={overview} onSelectPerson={setPerson} onPrepOneOnOne={setOneOnOnePerson}/>}
-          {screen==="Admin"    && <Admin />}
+          {/* People screen is a cross-team roster — developers don't see it. */}
+          {screen==="People" && currentUser?.role !== 'developer' && <People people={people} overview={overview} onSelectPerson={setPerson} onPrepOneOnOne={setOneOnOnePerson}/>}
+          {/* Admin panel gated on canAccessAdmin (false for developers and team_leads already). */}
+          {screen==="Admin" && checkAccess(currentUser, 'admin') && <Admin />}
           {screen==="Intelligence" && <IntelligenceChat currentUser={currentUser}/>}
         </div>
 
