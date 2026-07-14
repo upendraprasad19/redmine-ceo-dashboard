@@ -31,6 +31,25 @@ async function fetchAll(endpoint, key, params = '') {
 
 const userCache = new Map();
 const projectCache = new Map();
+const deliveryOwnerEnumToNeonId = new Map();
+
+const APPROVED_PROJECT_IDS = new Set([2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76]);
+
+async function buildDeliveryOwnerEnumMap(sql) {
+  deliveryOwnerEnumToNeonId.clear();
+  try {
+    const data = await redmineFetch('/custom_fields.json');
+    const cf = (data.custom_fields || []).find(c => c.id === 25);
+    const pv = cf?.possible_values || [];
+    for (const opt of pv) {
+      const rows = await sql`SELECT id FROM users WHERE name = ${opt.label} LIMIT 1`;
+      if (rows.length > 0) deliveryOwnerEnumToNeonId.set(String(opt.value), rows[0].id);
+    }
+    return `Delivery Owner enum map: ${deliveryOwnerEnumToNeonId.size}/${pv.length} resolved`;
+  } catch (e) {
+    return `Delivery Owner enum map failed: ${e.message}`;
+  }
+}
 
 async function getNeonUserId(sql, u) {
   if (!u) return null;
@@ -91,13 +110,19 @@ export default async function handler(req, res) {
     }
     log.push(`  Projects: ${projects.length} synced`);
 
-    // 3. Sync issues (last 7 days)
+    // 3. Build Delivery Owner enum map (after projects, before issues)
+    log.push('Building Delivery Owner enum map...');
+    const doResult = await buildDeliveryOwnerEnumMap(sql);
+    log.push(`  ${doResult}`);
+
+    // 4. Sync issues (last 7 days, approved projects only)
     log.push(`Syncing issues since ${sinceDate}...`);
     const issues = await fetchAll('/issues', 'issues', `&status_id=*&updated_on=>=${sinceDate}&sort=updated_on:desc`);
+    const filteredIssues = issues.filter(i => APPROVED_PROJECT_IDS.has(i.project?.id));
     const statusMap = { 'New': 'Todo', 'In Progress': 'In Progress', 'Code Review': 'Review', 'Blocked': 'Blocked', 'Resolved': 'Closed', 'Closed': 'Closed', 'Feedback': 'Review' };
     const priorityMap = { 'Low': 'Low', 'Normal': 'Medium', 'High': 'High', 'Urgent': 'Critical', 'Immediate': 'Critical' };
 
-    for (const issue of issues) {
+    for (const issue of filteredIssues) {
       const assigneeId = await getNeonUserId(sql, issue.assigned_to);
       const authorId = await getNeonUserId(sql, issue.author);
       const projectId = projectCache.get(issue.project?.id);
@@ -106,18 +131,41 @@ export default async function handler(req, res) {
       const bzField = issue.custom_fields?.find(cf => cf.id === 9);
       const bzId = bzField ? String(bzField.value) : null;
 
-      await sql`
-        INSERT INTO issues (redmine_id, project_id, title, description, status, priority, assigned_to_id, author_id, bz_id, start_date, due_date, done_ratio, closed_at, created_at, updated_at)
-        VALUES (${issue.id}, ${projectId || null}, ${issue.subject}, ${issue.description || null}, ${status}, ${priority}, ${assigneeId}, ${authorId}, ${bzId}, ${issue.start_date || null}, ${issue.due_date || null}, ${issue.done_ratio || 0}, ${issue.closed_on || null}, ${issue.created_on}, ${issue.updated_on})
-        ON CONFLICT (redmine_id) DO UPDATE SET status=EXCLUDED.status, priority=EXCLUDED.priority, assigned_to_id=EXCLUDED.assigned_to_id, bz_id=EXCLUDED.bz_id, done_ratio=EXCLUDED.done_ratio, due_date=EXCLUDED.due_date, closed_at=EXCLUDED.closed_at, updated_at=EXCLUDED.updated_at
-      `;
-    }
-    log.push(`  Issues: ${issues.length} synced`);
+      // Delivery Owner (custom field 25) — enumeration field, not User field
+      const doField = issue.custom_fields?.find(cf => cf.id === 25);
+      const doEnumVals = Array.isArray(doField?.value) ? doField.value : (doField?.value ? [doField.value] : []);
+      const resolvedIds = doEnumVals.map(v => deliveryOwnerEnumToNeonId.get(String(v))).filter(Boolean);
+      const deliveryOwnerIds = resolvedIds.length > 0 ? resolvedIds : null;
 
-    // 4. Sync time entries (last 7 days)
+      await sql`
+        INSERT INTO issues (redmine_id, project_id, title, description, status, priority, assigned_to_id, author_id, bz_id, delivery_owner_ids, start_date, due_date, done_ratio, closed_at, created_at, updated_at)
+        VALUES (${issue.id}, ${projectId || null}, ${issue.subject}, ${issue.description || null}, ${status}, ${priority}, ${assigneeId}, ${authorId}, ${bzId}, ${deliveryOwnerIds}, ${issue.start_date || null}, ${issue.due_date || null}, ${issue.done_ratio || 0}, ${issue.closed_on || null}, ${issue.created_on}, ${issue.updated_on})
+        ON CONFLICT (redmine_id) DO UPDATE SET status=EXCLUDED.status, priority=EXCLUDED.priority, assigned_to_id=EXCLUDED.assigned_to_id, bz_id=EXCLUDED.bz_id, delivery_owner_ids=EXCLUDED.delivery_owner_ids, done_ratio=EXCLUDED.done_ratio, due_date=EXCLUDED.due_date, closed_at=EXCLUDED.closed_at, updated_at=EXCLUDED.updated_at
+      `;
+
+      // Sync issue_team_history
+      if (assigneeId) {
+        await sql`
+          WITH issue_data AS (
+            SELECT i.id AS neon_issue_id, u.team AS team_name, u.id AS neon_user_id
+            FROM issues i
+            JOIN users u ON u.id = i.assigned_to_id
+            WHERE i.redmine_id = ${issue.id} AND u.team IS NOT NULL
+          )
+          INSERT INTO issue_team_history (issue_id, team_name, user_id, assigned_at)
+          SELECT neon_issue_id, team_name, neon_user_id, NOW()
+          FROM issue_data
+          ON CONFLICT (issue_id, team_name) DO UPDATE SET user_id=EXCLUDED.user_id, assigned_at=EXCLUDED.assigned_at
+        `;
+      }
+    }
+    log.push(`  Issues: ${filteredIssues.length} synced (${issues.length} total fetched, ${issues.length - filteredIssues.length} filtered out)`);
+
+    // 5. Sync time entries (last 7 days, approved projects only)
     log.push(`Syncing time entries since ${sinceDate}...`);
     const entries = await fetchAll('/time_entries', 'time_entries', `&spent_on=>=${sinceDate}`);
-    for (const e of entries) {
+    const filteredEntries = entries.filter(e => APPROVED_PROJECT_IDS.has(e.project?.id));
+    for (const e of filteredEntries) {
       const userId = await getNeonUserId(sql, e.user);
       const projectId = projectCache.get(e.project?.id);
       const resIssue = e.issue ? await sql`SELECT id FROM issues WHERE redmine_id = ${e.issue.id} LIMIT 1` : [];
@@ -128,7 +176,15 @@ export default async function handler(req, res) {
         ON CONFLICT (redmine_id) DO UPDATE SET hours=EXCLUDED.hours, comments=EXCLUDED.comments
       `;
     }
-    log.push(`  Time entries: ${entries.length} synced`);
+    log.push(`  Time entries: ${filteredEntries.length} synced (${entries.length - filteredEntries.length} filtered out)`);
+
+    // 6. Update sync state
+    await sql`
+      INSERT INTO sync_state (key, value, updated_at)
+      VALUES ('last_synced_at', ${new Date().toISOString()}, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `;
+    log.push('Sync state updated');
 
     log.push('Sync complete!');
     res.status(200).json({ ok: true, log });
