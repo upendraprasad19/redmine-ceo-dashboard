@@ -50,7 +50,7 @@ function formatMessage(text) {
       return (
         <a
           key={i}
-          href={`http://redmine.redmind.com/issues/${match[1]}`}
+          href={`https://redmine.thinkingcode.com/issues/${match[1]}`}
           target="_blank"
           rel="noreferrer"
           style={{ color: C.blueLight, textDecoration: "none", fontWeight: 600 }}

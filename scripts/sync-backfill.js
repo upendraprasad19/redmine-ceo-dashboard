@@ -18,7 +18,7 @@ const START_DATE  = '2025-10-01';
 
 const APPROVED_PROJECT_IDS = new Set([2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76]);
 
-const statusMap   = { 'New': 'Todo', 'In Progress': 'In Progress', 'Re Open': 'Re Open', 'Open': 'Open', 'Code Review': 'Review', 'Feedback': 'Review', 'Blocked': 'Blocked', 'Resolved': 'Closed', 'Closed': 'Closed', 'Verified': 'Closed', 'Rejected': 'Closed' };
+const statusMap   = { 'New': 'New', 'In Progress': 'In Progress', 'Re Open': 'Re Open', 'Open': 'Open', 'Code Review': 'Review', 'Feedback': 'Closed', 'Blocked': 'Blocked', 'Resolved': 'Closed', 'Closed': 'Closed', 'Verified': 'Closed', 'Rejected': 'Closed' };
 const priorityMap = { 'Low': 'Low', 'Normal': 'Medium', 'High': 'High', 'Urgent': 'Critical', 'Immediate': 'Critical' };
 
 // Delivery Owner enumeration (custom field id=25) — values are enum IDs, not user IDs

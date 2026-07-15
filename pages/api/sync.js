@@ -34,6 +34,7 @@ const projectCache = new Map();
 const deliveryOwnerEnumToNeonId = new Map();
 
 const APPROVED_PROJECT_IDS = new Set([2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76]);
+const FALLBACK_DAYS = 182;
 
 async function buildDeliveryOwnerEnumMap(sql) {
   deliveryOwnerEnumToNeonId.clear();
@@ -74,7 +75,20 @@ export default async function handler(req, res) {
   try {
     const sql = getDb();
     const log = [];
-    const sinceDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Determine sync window from sync_state (consistent with scripts/sync-redmine.js)
+    let sinceDate;
+    const lastRow = await sql`SELECT value FROM sync_state WHERE key = 'last_synced_at'`;
+    if (lastRow.length > 0 && lastRow[0].value) {
+      const last = new Date(lastRow[0].value);
+      last.setDate(last.getDate() - 1); // 1-day buffer
+      sinceDate = last.toISOString().split('T')[0];
+      log.push(`Delta sync — last synced ${lastRow[0].value.substring(0,10)}, using ${sinceDate}`);
+    } else {
+      const cutoff = new Date(Date.now() - FALLBACK_DAYS * 24 * 60 * 60 * 1000);
+      sinceDate = cutoff.toISOString().split('T')[0];
+      log.push(`No prior sync state — fallback ${FALLBACK_DAYS}d window from ${sinceDate}`);
+    }
 
     // 1. Sync users
     log.push('Syncing users...');
@@ -115,11 +129,11 @@ export default async function handler(req, res) {
     const doResult = await buildDeliveryOwnerEnumMap(sql);
     log.push(`  ${doResult}`);
 
-    // 4. Sync issues (last 7 days, approved projects only)
+    // 4. Sync issues (delta window, approved projects only)
     log.push(`Syncing issues since ${sinceDate}...`);
     const issues = await fetchAll('/issues', 'issues', `&status_id=*&updated_on=>=${sinceDate}&sort=updated_on:desc`);
     const filteredIssues = issues.filter(i => APPROVED_PROJECT_IDS.has(i.project?.id));
-    const statusMap = { 'New': 'Todo', 'In Progress': 'In Progress', 'Code Review': 'Review', 'Blocked': 'Blocked', 'Resolved': 'Closed', 'Closed': 'Closed', 'Feedback': 'Review' };
+    const statusMap = { 'New': 'New', 'In Progress': 'In Progress', 'Re Open': 'Re Open', 'Open': 'Open', 'Code Review': 'Review', 'Feedback': 'Closed', 'Blocked': 'Blocked', 'Resolved': 'Closed', 'Closed': 'Closed', 'Verified': 'Closed', 'Rejected': 'Closed' };
     const priorityMap = { 'Low': 'Low', 'Normal': 'Medium', 'High': 'High', 'Urgent': 'Critical', 'Immediate': 'Critical' };
 
     for (const issue of filteredIssues) {
@@ -161,7 +175,7 @@ export default async function handler(req, res) {
     }
     log.push(`  Issues: ${filteredIssues.length} synced (${issues.length} total fetched, ${issues.length - filteredIssues.length} filtered out)`);
 
-    // 5. Sync time entries (last 7 days, approved projects only)
+    // 5. Sync time entries (delta window, approved projects only)
     log.push(`Syncing time entries since ${sinceDate}...`);
     const entries = await fetchAll('/time_entries', 'time_entries', `&spent_on=>=${sinceDate}`);
     const filteredEntries = entries.filter(e => APPROVED_PROJECT_IDS.has(e.project?.id));
@@ -185,6 +199,20 @@ export default async function handler(req, res) {
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
     `;
     log.push('Sync state updated');
+
+    // 7. Weekly reconciliation (piggyback — runs at most once per 7 days)
+    const reconcileRow = await sql`SELECT value FROM sync_state WHERE key = 'last_reconcile_at'`;
+    if (reconcileRow.length === 0) {
+      log.push('Reconcile skipped: no baseline yet (first sync only covers recent window)');
+    } else {
+      const { runWeeklyReconcile } = require('../../crons/weekly-reconcile');
+      const reconcile = await runWeeklyReconcile();
+      if (reconcile.skipped) {
+        log.push(`Reconcile skipped: ${reconcile.reason}`);
+      } else {
+        log.push(`Reconcile: ${reconcile.inserted} inserted, ${reconcile.corrected} corrected, ${reconcile.projectsScanned} projects`);
+      }
+    }
 
     log.push('Sync complete!');
     res.status(200).json({ ok: true, log });

@@ -157,7 +157,7 @@ async function syncIssues(sinceDate) {
     return;
   }
 
-  const statusMap   = { 'New': 'Todo', 'In Progress': 'In Progress', 'Re Open': 'Re Open', 'Open': 'Open', 'Code Review': 'Review', 'Feedback': 'Review', 'Blocked': 'Blocked', 'Resolved': 'Closed', 'Closed': 'Closed', 'Verified': 'Closed', 'Rejected': 'Closed' };
+  const statusMap   = { 'New': 'New', 'In Progress': 'In Progress', 'Re Open': 'Re Open', 'Open': 'Open', 'Code Review': 'Review', 'Feedback': 'Closed', 'Blocked': 'Blocked', 'Resolved': 'Closed', 'Closed': 'Closed', 'Verified': 'Closed', 'Rejected': 'Closed' };
   const priorityMap = { 'Low': 'Low', 'Normal': 'Medium', 'High': 'High', 'Urgent': 'Critical', 'Immediate': 'Critical' };
 
   console.log(`\n⏳ Upserting ${filtered.length} issues...`);
@@ -268,11 +268,11 @@ async function main() {
 
       console.log(`🔄 Delta sync — last synced: ${lastSyncedAt.toISOString()}`);
     } else {
-      // No prior state — safe fallback: last 24 hours only
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      issuesSince = yesterday.toISOString().split('T')[0];
+      // No prior state — fallback to FALLBACK_DAYS so the first sync is thorough
+      const cutoff = new Date(Date.now() - FALLBACK_DAYS * 24 * 60 * 60 * 1000);
+      issuesSince = cutoff.toISOString().split('T')[0];
       timeEntriesSince = issuesSince;
-      console.log(`🔄 Delta sync — no prior state, fetching last 24h (${issuesSince})`);
+      console.log(`🔄 Delta sync — no prior state, fetching last ${FALLBACK_DAYS}d (${issuesSince})`);
     }
   }
 

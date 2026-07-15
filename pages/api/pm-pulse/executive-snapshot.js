@@ -1,6 +1,8 @@
 import { getDb } from '../../../lib/db';
 const { getCurrentUser } = require('../../../lib/auth');
 
+const APPROVED_REDMINE_IDS = [2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76];
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
@@ -25,6 +27,7 @@ export default async function handler(req, res) {
             JOIN users mu ON mu.id = oid
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
               AND u.team = ${team}
+              AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[])
             GROUP BY mu.name
             ORDER BY count DESC
             LIMIT 15`
@@ -35,6 +38,7 @@ export default async function handler(req, res) {
             CROSS JOIN LATERAL unnest(i.delivery_owner_ids) AS oid
             JOIN users mu ON mu.id = oid
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
+              AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[])
             GROUP BY mu.name
             ORDER BY count DESC
             LIMIT 15`,
@@ -48,6 +52,7 @@ export default async function handler(req, res) {
             JOIN users u ON u.id = i.assigned_to_id
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
               AND u.team = ${team}
+              AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[])
             GROUP BY p.name
             ORDER BY count DESC
             LIMIT 15`
@@ -56,6 +61,7 @@ export default async function handler(req, res) {
             FROM issues i
             JOIN projects p ON p.id = i.project_id
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
+              AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[])
             GROUP BY p.name
             ORDER BY count DESC
             LIMIT 15`,
@@ -68,6 +74,7 @@ export default async function handler(req, res) {
             JOIN users u ON u.id = i.assigned_to_id
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
               AND u.team = ${team}
+              AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))
             GROUP BY u.name
             ORDER BY count DESC
             LIMIT 15`
@@ -76,6 +83,7 @@ export default async function handler(req, res) {
             FROM issues i
             JOIN users u ON u.id = i.assigned_to_id
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
+              AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))
             GROUP BY u.name
             ORDER BY count DESC
             LIMIT 15`,

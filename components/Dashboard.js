@@ -808,6 +808,9 @@ function AnomalySection({ title, rows=[], columns=[] }) {
 function Tickets({ tickets=[], onSelectTicket }) {
   const [bucket, setBucket] = useState("All");
   const [anomalies, setAnomalies] = useState(null);
+  const [sortBy, setSortBy] = useState(null);     // 'created' | 'due'
+  const [sortDir, setSortDir] = useState(null);   // 'asc' | 'desc'
+  const [globalSort, setGlobalSort] = useState(false);
 
   useEffect(() => {
     fetch('/api/pm-pulse/anomalies').then(r => r.json()).then(setAnomalies).catch(() => {});
@@ -817,7 +820,21 @@ function Tickets({ tickets=[], onSelectTicket }) {
     ? tickets
     : tickets.filter(t => getProjectBucket(t.project_name || '') === bucket);
 
-  const projectGroups = groupBy(filteredTix, "project_name");
+  function sortFn(tix) {
+    if (!sortBy) return tix;
+    return [...tix].sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'created') cmp = new Date(a.created_at||0) - new Date(b.created_at||0);
+      else if (sortBy === 'due') {
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        cmp = new Date(a.due_date) - new Date(b.due_date);
+      }
+      return sortDir === 'desc' ? -cmp : cmp;
+    });
+  }
+  const sortedTix = sortFn(filteredTix);
+  const projectGroups = groupBy(sortedTix, "project_name");
   const overdueCount = filteredTix.filter(t => t.overdue).length;
   const blockedCount = filteredTix.filter(t => t.status === "Blocked").length;
   const reviewCount  = filteredTix.filter(t => t.status === "Review" || t.status === "In Review").length;
@@ -825,6 +842,10 @@ function Tickets({ tickets=[], onSelectTicket }) {
   // AppScript column layout (projectSheetHeaders — exact labels)
   const gridCol = "80px 70px 1.8fr 90px 95px 95px 95px 90px 1fr 100px";
   const headers = ["Redmine No", "BZ Id", "Brief description", "Status", "Created date", "Last update date", "Assigned to", "Due Date", "Team members who worked on it", "Manager"];
+  const effectiveGridCol = globalSort ? "80px 80px 1.8fr 90px 95px 95px 95px 90px 1fr 100px" : gridCol;
+  const effectiveHeaders = globalSort
+    ? ["Redmine No", "Project", "Brief description", "Status", "Created date", "Last update date", "Assigned to", "Due Date", "Team members", "Manager"]
+    : headers;
 
   function fmtDate(d) {
     if (!d) return '—';
@@ -834,6 +855,32 @@ function Tickets({ tickets=[], onSelectTicket }) {
     if (!name) return '—';
     const parts = name.split(' ');
     return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length-1][0]}.`;
+  }
+
+  function handleSort(col) {
+    if (sortBy !== col) { setSortBy(col); setSortDir('asc'); }
+    else if (sortDir === 'asc') { setSortDir('desc'); }
+    else { setSortBy(null); setSortDir(null); }
+  }
+
+  function sortHeader(label) {
+    const colKey = label === "Created date" ? 'created' : (label === "Due Date" ? 'due' : null);
+    const active = colKey && sortBy === colKey;
+    return (
+      <div key={label} onClick={colKey ? () => handleSort(colKey) : undefined}
+        style={{
+          fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase",
+          color: active ? C.blueLight : C.dimmer,
+          fontWeight: active ? 700 : 600,
+          cursor: colKey ? "pointer" : "default",
+          userSelect: "none", display: "flex", alignItems: "center", gap: 4,
+        }}
+      >
+        {label}
+        {active && (sortDir === 'asc' ? '↑' : '↓')}
+        {!active && colKey ? '↕' : null}
+      </div>
+    );
   }
 
   const anomCols = {
@@ -846,7 +893,7 @@ function Tickets({ tickets=[], onSelectTicket }) {
   function anomRow_reopen(r) {
     return [
       <span style={{fontSize:12,color:C.dim}}>{r.project_name||'—'}</span>,
-      <a href={`http://redmine.redmind.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
+      <a href={`https://redmine.thinkingcode.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
       <span style={{fontSize:12,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</span>,
       <span style={{fontSize:12,color:C.white}}>{renderName(r.assigned_to)}</span>,
       <span style={{fontSize:11,color:C.dim}}>{fmtDate(r.updated_at)}</span>,
@@ -856,7 +903,7 @@ function Tickets({ tickets=[], onSelectTicket }) {
   function anomRow_stale(r) {
     return [
       <span style={{fontSize:12,color:C.dim}}>{r.project_name||'—'}</span>,
-      <a href={`http://redmine.redmind.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
+      <a href={`https://redmine.thinkingcode.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
       <span style={{fontSize:12,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</span>,
       <StatusPill status={r.status}/>,
       <span style={{fontSize:12,color:C.white}}>{renderName(r.assigned_to)}</span>,
@@ -868,7 +915,7 @@ function Tickets({ tickets=[], onSelectTicket }) {
   function anomRow_worked(r) {
     return [
       <span style={{fontSize:12,color:C.dim}}>{r.project_name||'—'}</span>,
-      <a href={`http://redmine.redmind.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
+      <a href={`https://redmine.thinkingcode.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
       <span style={{fontSize:12,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</span>,
       <span style={{fontSize:12,color:C.dim}}>{renderName(r.assigned_to)}</span>,
       <span style={{fontSize:12,color:C.amber,fontWeight:600}}>{renderName(r.worked_by)}</span>,
@@ -880,7 +927,7 @@ function Tickets({ tickets=[], onSelectTicket }) {
   function anomRow_notime(r) {
     return [
       <span style={{fontSize:12,color:C.dim}}>{r.project_name||'—'}</span>,
-      <a href={`http://redmine.redmind.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
+      <a href={`https://redmine.thinkingcode.com/issues/${r.redmine_id}`} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.blueLight,textDecoration:"none",fontWeight:600}}>#{r.redmine_id}</a>,
       <span style={{fontSize:12,color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</span>,
       <StatusPill status={r.status}/>,
       <span style={{fontSize:12,color:C.white}}>{renderName(r.assigned_to)}</span>,
@@ -913,50 +960,117 @@ function Tickets({ tickets=[], onSelectTicket }) {
         ))}
       </div>
 
-      {/* Project accordions with AppScript columns */}
+      {/* Sort scope toggle */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+        <button onClick={() => setGlobalSort(v => !v)}
+          style={{
+            background: globalSort ? C.blue : "transparent",
+            border: `1px solid ${globalSort ? C.blue : C.border}`,
+            color: globalSort ? C.white : C.dim,
+            borderRadius: 20, padding: "6px 16px", fontSize: 11, fontWeight: 600,
+            cursor: "pointer", transition: "all .15s", letterSpacing: "0.04em",
+          }}
+        >
+          {globalSort ? "Global sort" : "Sort within projects"}
+        </button>
+        {sortBy && (
+          <button onClick={() => { setSortBy(null); setSortDir(null); }}
+            style={{
+              background: "transparent",
+              border: `1px solid ${C.border}`,
+              color: C.dimmer, borderRadius: 20, padding: "4px 12px",
+              fontSize: 10, fontWeight: 500, cursor: "pointer",
+            }}
+          >
+            Clear sort ×
+          </button>
+        )}
+      </div>
+
+      {/* Ticket list: per-accordion or flat global */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {Object.entries(projectGroups).map(([proj, tix]) => {
-          const od = tix.filter(t => t.overdue).length;
-          return (
-            <TeamAccordion key={proj} teamName={proj} count={`${tix.length} tickets`} meta={od > 0 ? `${od} overdue` : null}>
-              <div style={{ overflowX: "auto" }}>
-                <div style={{ minWidth: 1100 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: gridCol, gap: 10, padding: "8px 10px", marginBottom: 4 }}>
-                    {headers.map(h => (<div key={h} style={{ fontSize: 9, color: C.dimmer, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{h}</div>))}
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {tix.map((t, i) => {
-                      const rowBg = t.overdue ? C.red+"12" : (t.due_date && (new Date(t.due_date)-new Date())/86400000 <= 3 && (new Date(t.due_date)-new Date())/86400000 >= 0) ? C.red+"08" : "transparent";
-                      const assignedStyle = !t.assigned_to ? { background:C.amber+"22", border:`1px solid ${C.amber}44`, borderRadius:6, padding:"2px 8px" } : {};
-                      return (
-                        <div key={t.id}>
-                          <div style={{ display: "grid", gridTemplateColumns: gridCol, gap: 10, padding: "11px 10px", borderRadius: 8, background:rowBg, alignItems: "center", transition:"background .12s" }}
-                            onMouseEnter={e => { if(!rowBg||rowBg==="transparent") e.currentTarget.style.background="#0c1a2e"; }}
-                            onMouseLeave={e => { e.currentTarget.style.background=rowBg; }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              {t.overdue && <Dot color={C.red} pulse />}
-                              <a href={`http://redmine.redmind.com/issues/${t.redmine_id||t.id}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blueLight, textDecoration: "none", fontWeight: 600 }}>#{t.redmine_id||t.id}</a>
-                            </div>
-                            <div style={{ fontSize: 11, color: C.amber }}>{t.bz_id || '—'}</div>
-                            <div onClick={() => onSelectTicket(t)} style={{ fontSize: 13, fontWeight: 600, color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}>{t.title}</div>
-                            <StatusPill status={t.status}/>
-                            <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.created_at)}</div>
-                            <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.updated_at || t.last_update)}</div>
-                            <div style={{ fontSize: 12, color: C.white, fontWeight: 500, ...assignedStyle }}>{t.assigned_to ? renderName(t.assigned_to) : 'Unassigned'}</div>
-                            <div style={{ fontSize: 11, color: t.overdue ? C.red : (t.due_date && (new Date(t.due_date)-new Date())/86400000 <= 3 && (new Date(t.due_date)-new Date())/86400000 >= 0 ? C.amber : C.dim), fontWeight: t.overdue ? 600 : 400 }}>{fmtDate(t.due_date)}</div>
-                            <div style={{ fontSize: 11, color: C.dimmer, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.contributors || '—'}</div>
-                            <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>{renderName(t.manager)}</div>
-                          </div>
-                          {i < tix.length - 1 && <Divider />}
+        {globalSort ? (
+          /* ── Flat global sorted list ── */
+          <div style={{ overflowX: "auto" }}>
+            <div style={{ minWidth: 1100 }}>
+              <div style={{ display: "grid", gridTemplateColumns: effectiveGridCol, gap: 10, padding: "8px 10px", marginBottom: 4 }}>
+                {effectiveHeaders.map(sortHeader)}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {sortedTix.map((t, i) => {
+                  const rowBg = t.overdue ? C.red+"12" : (t.due_date && (new Date(t.due_date)-new Date())/86400000 <= 3 && (new Date(t.due_date)-new Date())/86400000 >= 0) ? C.red+"08" : "transparent";
+                  const assignedStyle = !t.assigned_to ? { background:C.amber+"22", border:`1px solid ${C.amber}44`, borderRadius:6, padding:"2px 8px" } : {};
+                  return (
+                    <div key={t.id}>
+                      <div style={{ display: "grid", gridTemplateColumns: effectiveGridCol, gap: 10, padding: "11px 10px", borderRadius: 8, background:rowBg, alignItems: "center", transition:"background .12s" }}
+                        onMouseEnter={e => { if(!rowBg||rowBg==="transparent") e.currentTarget.style.background="#0c1a2e"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background=rowBg; }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {t.overdue && <Dot color={C.red} pulse />}
+                          <a href={`https://redmine.thinkingcode.com/issues/${t.redmine_id||t.id}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blueLight, textDecoration: "none", fontWeight: 600 }}>#{t.redmine_id||t.id}</a>
                         </div>
-                      );
-                    })}
+                        <div style={{ fontSize: 11, color: C.dim }}>{t.project_name || '—'}</div>
+                        <div onClick={() => onSelectTicket(t)} style={{ fontSize: 13, fontWeight: 600, color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}>{t.title}</div>
+                        <StatusPill status={t.status}/>
+                        <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.created_at)}</div>
+                        <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.updated_at || t.last_update)}</div>
+                        <div style={{ fontSize: 12, color: C.white, fontWeight: 500, ...assignedStyle }}>{t.assigned_to ? renderName(t.assigned_to) : 'Unassigned'}</div>
+                        <div style={{ fontSize: 11, color: t.overdue ? C.red : (t.due_date && (new Date(t.due_date)-new Date())/86400000 <= 3 && (new Date(t.due_date)-new Date())/86400000 >= 0 ? C.amber : C.dim), fontWeight: t.overdue ? 600 : 400 }}>{fmtDate(t.due_date)}</div>
+                        <div style={{ fontSize: 11, color: C.dimmer, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.contributors || '—'}</div>
+                        <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>{renderName(t.manager)}</div>
+                      </div>
+                      {i < sortedTix.length - 1 && <Divider />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ── Per-accordion sorted lists ── */
+          Object.entries(projectGroups).map(([proj, tix]) => {
+            const od = tix.filter(t => t.overdue).length;
+            return (
+              <TeamAccordion key={proj} teamName={proj} count={`${tix.length} tickets`} meta={od > 0 ? `${od} overdue` : null}>
+                <div style={{ overflowX: "auto" }}>
+                  <div style={{ minWidth: 1100 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: gridCol, gap: 10, padding: "8px 10px", marginBottom: 4 }}>
+                      {headers.map(sortHeader)}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {tix.map((t, i) => {
+                        const rowBg = t.overdue ? C.red+"12" : (t.due_date && (new Date(t.due_date)-new Date())/86400000 <= 3 && (new Date(t.due_date)-new Date())/86400000 >= 0) ? C.red+"08" : "transparent";
+                        const assignedStyle = !t.assigned_to ? { background:C.amber+"22", border:`1px solid ${C.amber}44`, borderRadius:6, padding:"2px 8px" } : {};
+                        return (
+                          <div key={t.id}>
+                            <div style={{ display: "grid", gridTemplateColumns: gridCol, gap: 10, padding: "11px 10px", borderRadius: 8, background:rowBg, alignItems: "center", transition:"background .12s" }}
+                              onMouseEnter={e => { if(!rowBg||rowBg==="transparent") e.currentTarget.style.background="#0c1a2e"; }}
+                              onMouseLeave={e => { e.currentTarget.style.background=rowBg; }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                {t.overdue && <Dot color={C.red} pulse />}
+                                <a href={`https://redmine.thinkingcode.com/issues/${t.redmine_id||t.id}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blueLight, textDecoration: "none", fontWeight: 600 }}>#{t.redmine_id||t.id}</a>
+                              </div>
+                              <div style={{ fontSize: 11, color: C.amber }}>{t.bz_id || '—'}</div>
+                              <div onClick={() => onSelectTicket(t)} style={{ fontSize: 13, fontWeight: 600, color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}>{t.title}</div>
+                              <StatusPill status={t.status}/>
+                              <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.created_at)}</div>
+                              <div style={{ fontSize: 11, color: C.dim }}>{fmtDate(t.updated_at || t.last_update)}</div>
+                              <div style={{ fontSize: 12, color: C.white, fontWeight: 500, ...assignedStyle }}>{t.assigned_to ? renderName(t.assigned_to) : 'Unassigned'}</div>
+                              <div style={{ fontSize: 11, color: t.overdue ? C.red : (t.due_date && (new Date(t.due_date)-new Date())/86400000 <= 3 && (new Date(t.due_date)-new Date())/86400000 >= 0 ? C.amber : C.dim), fontWeight: t.overdue ? 600 : 400 }}>{fmtDate(t.due_date)}</div>
+                              <div style={{ fontSize: 11, color: C.dimmer, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.contributors || '—'}</div>
+                              <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>{renderName(t.manager)}</div>
+                            </div>
+                            {i < tix.length - 1 && <Divider />}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </TeamAccordion>
-          );
-        })}
+              </TeamAccordion>
+            );
+          })
+        )}
       </div>
 
       {/* ── ANOMALY SECTIONS ── */}

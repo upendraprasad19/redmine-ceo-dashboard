@@ -8,6 +8,8 @@
 import { getDb } from '../../../lib/db';
 import { sendTelegramMessage } from '../../../lib/telegram';
 
+const APPROVED_REDMINE_IDS = [2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76];
+
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
 
@@ -80,14 +82,14 @@ async function buildBriefing(sql, user, profile) {
 
   const [overdueRes, missingRes, blockedRes, leaveRes] = await Promise.all([
     isManager
-      ? sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved','Verified','Rejected')`
-      : sql`SELECT COUNT(*) AS count FROM issues i JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') AND u.team = ${team}`,
+      ? sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved','Verified','Rejected') AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`
+      : sql`SELECT COUNT(*) AS count FROM issues i JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') AND u.team = ${team} AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
     isManager
       ? sql`SELECT COUNT(*) AS count FROM users WHERE active = true AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE)`
       : sql`SELECT COUNT(*) AS count FROM users WHERE active = true AND team = ${team} AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE)`,
     isManager
-      ? sql`SELECT COUNT(*) AS count FROM issues WHERE status = 'Blocked'`
-      : sql`SELECT COUNT(*) AS count FROM issues i JOIN users u ON u.id = i.assigned_to_id WHERE i.status = 'Blocked' AND u.team = ${team}`,
+      ? sql`SELECT COUNT(*) AS count FROM issues WHERE status = 'Blocked' AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`
+      : sql`SELECT COUNT(*) AS count FROM issues i JOIN users u ON u.id = i.assigned_to_id WHERE i.status = 'Blocked' AND u.team = ${team} AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
     isManager
       ? sql`SELECT COUNT(*) AS count FROM leave_records WHERE CURRENT_DATE BETWEEN start_date AND end_date`
       : sql`SELECT COUNT(*) AS count FROM leave_records lr JOIN users u ON u.id = lr.user_id WHERE CURRENT_DATE BETWEEN lr.start_date AND lr.end_date AND u.team = ${team}`,
@@ -112,8 +114,8 @@ async function buildBriefing(sql, user, profile) {
   // Concern-specific extra data
   if (concerns.includes('overdue_tickets') && overdue > 0) {
     const top = isManager
-      ? await sql`SELECT i.redmine_id, i.title, u.name AS assignee FROM issues i LEFT JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') ORDER BY i.due_date ASC LIMIT 3`
-      : await sql`SELECT i.redmine_id, i.title, u.name AS assignee FROM issues i LEFT JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') AND u.team = ${team} ORDER BY i.due_date ASC LIMIT 3`;
+      ? await sql`SELECT i.redmine_id, i.title, u.name AS assignee FROM issues i LEFT JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[])) ORDER BY i.due_date ASC LIMIT 3`
+      : await sql`SELECT i.redmine_id, i.title, u.name AS assignee FROM issues i LEFT JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') AND u.team = ${team} AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[])) ORDER BY i.due_date ASC LIMIT 3`;
     if (top.length > 0) {
       lines.push(`\n🔴 *Top overdue:*`);
       for (const t of top) {

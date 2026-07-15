@@ -7,6 +7,8 @@
 import { getDb } from '../../../lib/db';
 import { sendTelegramMessage } from '../../../lib/telegram';
 
+const APPROVED_REDMINE_IDS = [2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76];
+
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
 
@@ -24,16 +26,16 @@ export default async function handler(req, res) {
     `;
 
     const [velocity, compliance, overdue, topProjects] = await Promise.all([
-      sql`SELECT COUNT(*) AS count FROM issues WHERE status IN ('Closed','Resolved') AND updated_at >= NOW() - INTERVAL '7 days'`,
+      sql`SELECT COUNT(*) AS count FROM issues WHERE status IN ('Closed','Resolved') AND updated_at >= NOW() - INTERVAL '7 days' AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
       sql`
         SELECT ROUND(COUNT(DISTINCT te.user_id) * 100.0 / NULLIF((SELECT COUNT(*) FROM users WHERE active = true), 0)) AS pct
         FROM time_entries te WHERE te.spent_on >= CURRENT_DATE - 7
       `,
-      sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved','Verified','Rejected')`,
+      sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved','Verified','Rejected') AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
       sql`
         SELECT p.name,
           (SELECT COUNT(*) FROM issues WHERE project_id = p.id AND status NOT IN ('Closed','Resolved','Verified','Rejected')) AS open_tickets
-        FROM projects p WHERE p.status = 'active' ORDER BY open_tickets DESC LIMIT 5
+        FROM projects p WHERE p.status = 'active' AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]) ORDER BY open_tickets DESC LIMIT 5
       `,
     ]);
 
