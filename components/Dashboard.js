@@ -34,6 +34,23 @@ function groupBy(arr, key) {
     return acc; 
   }, {});
 }
+
+const PROJECT_ORDER = [
+  'iCLAIMS 2.0', 'iCLAIMS',
+  'iCAST 2.0', 'iCAST',
+  'Liability (iPLUS 2.0)', 'iPLUS RW', 'Rule Engine for Liability (iPLUS2.0)',
+  'Widget Based iPACS', 'iPACS 2.0', 'iPACS',
+  'iPPO 2', 'iPPO',
+  'iSAM 2.0', 'iSAM',
+  'iTAKE 3.0', 'iTAKE and iTAKE 2.0',
+  'Maya Virtual Assistant', 'Maya Agents', 'Maya Docs', 'Maya Charts', 'Maya Audits / Assistance', 'Maya Insights', 'Maya Predictions', 'Maya Voice',
+  'Claim Info Bot', 'Producer App', 'Support Bot',
+  'ThinkingCode AI',
+  'Tristar Ai Bot',
+  'iDART',
+  'Reports 3.0',
+  'Unassigned',
+];
 const riskColor  = r => ({ critical:C.red, high:C.amber, medium:C.blueLight, low:C.green }[r?.toLowerCase()] || C.dim);
 const statusColor = s => ({ "In Progress":C.blueLight, "Review":C.green, "Blocked":C.red, "Todo":C.dimmer }[s] || C.dim);
 
@@ -1028,7 +1045,14 @@ function Tickets({ tickets=[], onSelectTicket }) {
           </div>
         ) : (
           /* ── Per-accordion sorted lists ── */
-          Object.entries(projectGroups).map(([proj, tix]) => {
+          Object.entries(projectGroups).sort(([a], [b]) => {
+            const ia = PROJECT_ORDER.indexOf(a);
+            const ib = PROJECT_ORDER.indexOf(b);
+            if (ia !== -1 && ib !== -1) return ia - ib;
+            if (ia !== -1) return -1;
+            if (ib !== -1) return 1;
+            return a.localeCompare(b);
+          }).map(([proj, tix]) => {
             const od = tix.filter(t => t.overdue).length;
             return (
               <TeamAccordion key={proj} teamName={proj} count={`${tix.length} tickets`} meta={od > 0 ? `${od} overdue` : null}>
