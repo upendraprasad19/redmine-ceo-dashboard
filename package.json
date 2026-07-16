@@ -17,7 +17,7 @@
     "test:unit:watch": "vitest"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^0.9.3",
+    "@neondatabase/serverless": "^0.9.5",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.17.14",
     "@slack/bolt": "^4.6.0",
