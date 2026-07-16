@@ -27,7 +27,7 @@ export default async function handler(req, res) {
               u.team,
               (SELECT COUNT(*) FROM (
                 SELECT 1 FROM issues i2 WHERE i2.assigned_to_id = u.id AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')
-                UNION
+                UNION ALL
                 SELECT 1 FROM time_entries te2 JOIN issues i2 ON i2.id = te2.issue_id WHERE te2.user_id = u.id AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')
               ) combined)::int AS total,
               SUM(CASE WHEN i.status = 'New' THEN 1 ELSE 0 END)::int AS new_count,
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
               u.team,
               (SELECT COUNT(*) FROM (
                 SELECT 1 FROM issues i2 WHERE i2.assigned_to_id = u.id AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')
-                UNION
+                UNION ALL
                 SELECT 1 FROM time_entries te2 JOIN issues i2 ON i2.id = te2.issue_id WHERE te2.user_id = u.id AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')
               ) combined)::int AS total,
               SUM(CASE WHEN i.status = 'New' THEN 1 ELSE 0 END)::int AS new_count,
