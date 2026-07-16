@@ -1076,10 +1076,26 @@ function People({ people=[], overview={}, onSelectPerson, onPrepOneOnOne }) {
     return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric' });
   }
 
+  function healthScores(ld, tl) {
+    if (!ld) return null;
+    const overdueScore = Math.max(0, 100 - (ld.overdue / Math.max(ld.total, 1)) * 100);
+    const ageingScore = Math.max(0, 100 - (ld.avg_age_days / 30) * 100);
+    const engageScore = Math.max(0, 100 - (tl?.days_since_last_log ?? 99) * 10);
+    const loadScore = Math.max(0, 100 - (ld.total / 8) * 50);
+    const reopenScore = Math.max(0, 100 - (ld.reopen_count / Math.max(ld.total, 1)) * 100);
+    const composite = Math.round(overdueScore*0.30 + ageingScore*0.25 + engageScore*0.20 + loadScore*0.15 + reopenScore*0.10);
+    return { bars: [Math.round(loadScore), Math.round(overdueScore), Math.round(engageScore), Math.round(ageingScore)], composite };
+  }
+
+  const BAR_LABELS = ['WkL','Ovr','Eng','Age'];
+  const BAR_COLORS = [C.blueLight, C.red, C.green, C.amber];
+
   // Team card aggregates (from workload + memberHours in overview)
   const workload = overview.workload || [];
   const memberHours = overview.memberHours || [];
   const timeLogData = devLoad?.timeLog || [];
+  const loadById = Object.fromEntries((devLoad?.load || []).map(r => [r.id, r]));
+  const logById = Object.fromEntries((devLoad?.timeLog || []).map(r => [r.id, r]));
 
   // Build per-team stats for the cards strip
   const teamStats = EXPECTED_TIME_TEAMS.map(team => {
@@ -1159,30 +1175,54 @@ function People({ people=[], overview={}, onSelectPerson, onPrepOneOnOne }) {
         ))}
       </div>
 
-      {/* ── MEMBERS ACCORDIONS (filtered by team) ── */}
+      {/* ── MEMBERS ACCORDIONS (filtered by team, with health scores) ── */}
       {Object.entries(teamGroups).map(([team, members]) => {
         const onL = members.filter(m => m.leave).length;
         return (
           <TeamAccordion key={team} teamName={team} count={`${members.length} members`} meta={onL > 0 ? `${onL} on leave` : null}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 100px 100px 100px 80px 90px", gap: 16, padding: "8px 10px", marginBottom: 4 }}>
-              {["Name", "Role", "Tickets", "Working", "Hours", "Status", ""].map(h => (<div key={h} style={{ fontSize: 9, color: C.dimmer, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{h}</div>))}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 48px 145px 55px 80px", gap: 16, padding: "8px 10px", marginBottom: 4 }}>
+              {["Name", "Health", "Load · Overdue · Engage · Age", "Status", ""].map(h => (<div key={h} style={{ fontSize: 9, color: C.dimmer, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{h}</div>))}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {members.map((m, i) => {
-                const pct = (m.worked / 45) * 100; const col = pct > 80 ? C.red : pct > 60 ? C.amber : C.blue;
+                const ld = loadById[m.id];
+                const tl = logById[m.id];
+                const h = healthScores(ld, tl);
+                const hColor = h ? (h.composite >= 70 ? C.green : h.composite >= 40 ? C.amber : C.red) : C.dimmer;
                 return (
                   <div key={m.id || i}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 100px 100px 100px 80px 90px", gap: 16, padding: "11px 10px", cursor: "pointer", borderRadius: 8, transition: "background .12s", alignItems: "center" }}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 48px 145px 55px 80px", gap: 16, padding: "11px 10px", cursor: "pointer", borderRadius: 8, transition: "background .12s", alignItems: "center" }}
                       onMouseEnter={e => e.currentTarget.style.background = "#0c1a2e"}
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                       <div onClick={() => onSelectPerson(m)} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <Avatar initials={m.initials} size={32} />
                         <div><div style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{m.name}</div><div style={{ fontSize: 10, color: C.dimmer, marginTop: 1 }}>{m.team}</div></div>
                       </div>
-                      <div style={{ fontSize: 12, color: C.dim }}>{m.role || 'Member'}</div>
-                      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 700, color: C.blueLight }}>{m.tickets_created || 0}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Bar pct={((m.tickets_worked || 0) / 45) * 100} color={col} h={4} /><span style={{ fontSize: 11, color: col, fontWeight: 600, flexShrink: 0 }}>{m.tickets_worked || 0}</span></div>
-                      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 700, color: C.green }}>{m.hours_this_month || 0}h</div>
+
+                      {/* Health circle */}
+                      <div style={{
+                        width: 28, height: 28, borderRadius: "50%",
+                        background: hColor + "22", border: `2px solid ${hColor}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontFamily: "'Barlow Condensed',sans-serif",
+                        fontSize: 11, fontWeight: 700, color: hColor,
+                      }}>{h ? h.composite : '—'}</div>
+
+                      {/* 4 mini-bars inline */}
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {(h ? h.bars : [0,0,0,0]).map((score, bi) => {
+                          const barColor = score >= 70 ? BAR_COLORS[bi] : score >= 40 ? C.amber : C.red;
+                          return (
+                            <div key={bi} style={{ display: "flex", alignItems: "center", gap: 2, flex:1 }}>
+                              <span style={{ fontSize: 7, color: C.dimmer, fontWeight: 600, letterSpacing:"0.04em", width:16 }}>{BAR_LABELS[bi]}</span>
+                              <div style={{ flex:1, height: 3, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
+                                <div style={{ width: `${Math.max(score, 0)}%`, height: "100%", background: barColor, borderRadius: 2 }} />
+                              </div>
+                              <span style={{ fontSize: 9, color: C.dimmer, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 600, width:16, textAlign:"right" }}>{score}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
 
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         {m.leave ? <><Dot color={C.amber} pulse /><span style={{ fontSize: 11, color: C.amber }}>{m.leave}</span></> : <><Dot color={C.green} /><span style={{ fontSize: 11, color: C.dim }}>Active</span></>}
@@ -1219,16 +1259,15 @@ function People({ people=[], overview={}, onSelectPerson, onPrepOneOnOne }) {
         <div style={{ display:"flex", flexDirection:"column", gap:10, marginTop:8 }}>
           <div style={{ fontSize:11, letterSpacing:"0.12em", color:C.dimmer, textTransform:"uppercase", fontWeight:600, marginBottom:2 }}>Developer Workload{selectedTeam !== 'All' ? ` — ${selectedTeam}` : ''}</div>
 
-          {/* Developer Load */}
+          {/* Merged Load + Ageing */}
           <AnomalySection
-            title={`Developer Load (${loadRows.length})`}
+            title={`Developer Details (${loadRows.length})`}
             rows={loadRows.map(r => {
               const isOverloaded = r.total > 8;
               const rowStyle = isOverloaded ? { background:C.amber+"15", borderRadius:6, padding:"2px 6px" } : {};
               return [
                 <span style={{ fontSize:12, color:C.white, fontWeight:600 }}>{r.name}</span>,
                 <span style={{ fontSize:11, color:C.dim }}>{r.team}</span>,
-                <span style={{ fontSize:11, color:C.dim }}>{r.manager||'—'}</span>,
                 <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:18, fontWeight:700, color:isOverloaded?C.amber:C.blueLight, ...rowStyle }}>{r.total}</span>,
                 <span style={{ fontSize:11, color:C.dimmer }}>{r.new_count}</span>,
                 <span style={{ fontSize:11, color:C.blueLight }}>{r.in_progress_count}</span>,
@@ -1236,27 +1275,16 @@ function People({ people=[], overview={}, onSelectPerson, onPrepOneOnOne }) {
                 <span style={{ fontSize:11, color:r.overdue?C.red:C.dimmer, fontWeight:r.overdue?700:400 }}>{r.overdue}</span>,
                 <span style={{ fontSize:11, color:r.due_soon?C.amber:C.dimmer }}>{r.due_soon}</span>,
                 <span style={{ fontSize:11, color:r.high_priority?C.red:C.dimmer }}>{r.high_priority}</span>,
-                <span style={{ fontSize:10, color:C.dimmer, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.projects||'—'}</span>,
+                <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, fontWeight:700, color:r.avg_age_days>10?C.amber:C.dim }}>{r.avg_age_days||0}</span>,
+                <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, fontWeight:700, color:r.max_age_days>15?C.red:C.dim }}>{r.max_age_days||0}</span>,
+                <span style={{ fontSize:11, color:r.tickets_7plus?C.amber:C.dimmer }}>{r.tickets_7plus||0}</span>,
+                <span style={{ fontSize:11, color:r.tickets_15plus?C.red:C.dimmer }}>{r.tickets_15plus||0}</span>,
+                <span style={{ fontSize:10, color:C.dimmer, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.projects||''}>{r.projects||'—'}</span>,
                 <span style={{ fontSize:11, color:C.dim }}>{fmtDate(r.oldest_ticket_date)}</span>,
                 <span style={{ fontSize:11, color:C.dim }}>{fmtDate(r.latest_update)}</span>,
               ];
             })}
-            columns={["Developer","Team","Manager","Total","New","In Progress","Re Open","Overdue","Due Soon","High Priority","Projects","Oldest","Latest Update"]}
-          />
-
-          {/* Ageing by Developer */}
-          <AnomalySection
-            title={`Ageing by Developer (${loadRows.length})`}
-            rows={loadRows.map(r => [
-              <span style={{ fontSize:12, color:C.white, fontWeight:600 }}>{r.name}</span>,
-              <span style={{ fontSize:11, color:C.dim }}>{r.manager||'—'}</span>,
-              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:C.blueLight }}>{r.total}</span>,
-              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:r.avg_age_days>10?C.amber:C.dim }}>{r.avg_age_days||0}</span>,
-              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:r.max_age_days>15?C.red:C.dim }}>{r.max_age_days||0}</span>,
-              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:r.tickets_7plus?C.amber:C.dimmer }}>{r.tickets_7plus||0}</span>,
-              <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:16, fontWeight:700, color:r.tickets_15plus?C.red:C.dimmer }}>{r.tickets_15plus||0}</span>,
-            ])}
-            columns={["Developer","Manager","Active Tickets","Avg Age (Days)","Oldest Age (Days)","Tickets 7+ Days","Tickets 15+ Days"]}
+            columns={["Developer","Team","Total","New","In Progress","Re Open","Overdue","Due Soon","High Priority","Avg Age","Max Age","7+ Days","15+ Days","Projects","Oldest","Latest"]}
           />
 
           {/* Developer Time Log — with status filter */}

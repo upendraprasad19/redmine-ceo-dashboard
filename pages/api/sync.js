@@ -140,7 +140,7 @@ export default async function handler(req, res) {
       const assigneeId = await getNeonUserId(sql, issue.assigned_to);
       const authorId = await getNeonUserId(sql, issue.author);
       const projectId = projectCache.get(issue.project?.id);
-      const status = statusMap[issue.status?.name] || issue.status?.name || 'Todo';
+      const status     = statusMap[issue.status?.name] || issue.status?.name || 'New';
       const priority = priorityMap[issue.priority?.name] || 'Medium';
       const bzField = issue.custom_fields?.find(cf => cf.id === 9);
       const bzId = bzField ? String(bzField.value) : null;

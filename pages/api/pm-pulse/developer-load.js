@@ -17,14 +17,20 @@ export default async function handler(req, res) {
     const [load, timeLog] = await Promise.all([
 
       // Developer Load — active ticket counts per developer
+      // total includes assigned tickets + tickets where user logged time
+      // breakdown counts (New, In Progress, etc.) from assigned tickets only
       isTeamLead
         ? sql`
             SELECT
+              u.id,
               u.name,
               u.team,
-              mu.name AS manager,
-              COUNT(i.id)::int AS total,
-              SUM(CASE WHEN i.status = 'Todo' THEN 1 ELSE 0 END)::int AS new_count,
+              (SELECT COUNT(*) FROM (
+                SELECT 1 FROM issues i2 WHERE i2.assigned_to_id = u.id AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')
+                UNION
+                SELECT 1 FROM time_entries te2 JOIN issues i2 ON i2.id = te2.issue_id WHERE te2.user_id = u.id AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')
+              ) combined)::int AS total,
+              SUM(CASE WHEN i.status = 'New' THEN 1 ELSE 0 END)::int AS new_count,
               SUM(CASE WHEN i.status = 'In Progress' THEN 1 ELSE 0 END)::int AS in_progress_count,
               SUM(CASE WHEN i.status = 'Re Open' THEN 1 ELSE 0 END)::int AS reopen_count,
               SUM(CASE WHEN i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE THEN 1 ELSE 0 END)::int AS overdue,
@@ -40,18 +46,21 @@ export default async function handler(req, res) {
             FROM issues i
             JOIN users u ON u.id = i.assigned_to_id
             LEFT JOIN projects p ON p.id = i.project_id
-            LEFT JOIN users mu ON mu.id = p.manager_id
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
               AND u.team = ${team}
-            GROUP BY u.id, u.name, u.team, mu.name
+            GROUP BY u.id, u.name, u.team
             ORDER BY u.name`
         : sql`
             SELECT
+              u.id,
               u.name,
               u.team,
-              mu.name AS manager,
-              COUNT(i.id)::int AS total,
-              SUM(CASE WHEN i.status = 'Todo' THEN 1 ELSE 0 END)::int AS new_count,
+              (SELECT COUNT(*) FROM (
+                SELECT 1 FROM issues i2 WHERE i2.assigned_to_id = u.id AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')
+                UNION
+                SELECT 1 FROM time_entries te2 JOIN issues i2 ON i2.id = te2.issue_id WHERE te2.user_id = u.id AND i2.status NOT IN ('Closed','Resolved','Verified','Rejected')
+              ) combined)::int AS total,
+              SUM(CASE WHEN i.status = 'New' THEN 1 ELSE 0 END)::int AS new_count,
               SUM(CASE WHEN i.status = 'In Progress' THEN 1 ELSE 0 END)::int AS in_progress_count,
               SUM(CASE WHEN i.status = 'Re Open' THEN 1 ELSE 0 END)::int AS reopen_count,
               SUM(CASE WHEN i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE THEN 1 ELSE 0 END)::int AS overdue,
@@ -67,15 +76,15 @@ export default async function handler(req, res) {
             FROM issues i
             JOIN users u ON u.id = i.assigned_to_id
             LEFT JOIN projects p ON p.id = i.project_id
-            LEFT JOIN users mu ON mu.id = p.manager_id
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
-            GROUP BY u.id, u.name, u.team, mu.name
+            GROUP BY u.id, u.name, u.team
             ORDER BY u.team, u.name`,
 
       // Developer Time Log — hours summary per developer
       isTeamLead
         ? sql`
             SELECT
+              u.id,
               u.name,
               u.team,
               COALESCE(SUM(CASE WHEN te.spent_on = CURRENT_DATE THEN te.hours ELSE 0 END), 0)::float AS hours_today,
@@ -93,6 +102,7 @@ export default async function handler(req, res) {
             ORDER BY u.name`
         : sql`
             SELECT
+              u.id,
               u.name,
               u.team,
               COALESCE(SUM(CASE WHEN te.spent_on = CURRENT_DATE THEN te.hours ELSE 0 END), 0)::float AS hours_today,
@@ -109,7 +119,7 @@ export default async function handler(req, res) {
             ORDER BY u.team, u.name`,
     ]);
 
-    // Derive logging status client-side would also work, but do it here for simplicity
+    // Derive logging status
     const timeLogWithStatus = timeLog.map(row => ({
       ...row,
       logging_status:

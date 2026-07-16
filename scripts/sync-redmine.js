@@ -168,7 +168,7 @@ async function syncIssues(sinceDate) {
       const assigneeId = await getNeonUserId(issue.assigned_to);
       const authorId   = await getNeonUserId(issue.author);
       const projectId  = projectCache.get(issue.project?.id);
-      const status     = statusMap[issue.status?.name] || issue.status?.name || 'Todo';
+      const status     = statusMap[issue.status?.name] || issue.status?.name || 'New';
       const priority   = priorityMap[issue.priority?.name] || 'Medium';
       const bzField    = issue.custom_fields?.find(cf => cf.id === 9);
       const bzId       = bzField ? String(bzField.value) : null;
