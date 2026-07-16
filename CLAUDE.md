@@ -11,7 +11,7 @@ DB and surfaces it as per-role (manager / team_lead) views. Deployed on Vercel.
   Nodemailer (`lib/email.js`), OpenRouter via `lib/ai.js`.
 - **Auth**: JWT session cookie (`ceo_session`), bcrypt password hashes in
   `dashboard_users.password_hash`. See `lib/auth.js`.
-- **Production branch**: `master`. Push to master → Vercel auto-deploys.
+- **Production branch**: `main`. Push to main → Vercel auto-deploys. (Both `main` and `master` exist; keep them in sync.)
 
 ## Company domain rule (IMPORTANT)
 The company domain is **`thinkingcode.com`** (no hyphen). Redmine stores the
