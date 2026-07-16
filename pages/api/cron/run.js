@@ -23,6 +23,7 @@ const JOB_MAP = {
   'memory-compress': { module: '../../../crons/memory-compress', fn: 'runMemoryCompression' },
   'pulse-digest':   { module: '../../../crons/pulse-digest',    fn: 'runPulseDigest' },
   'predictions':    { module: '../../../crons/predictions',     fn: 'runVelocityPredictions' },
+  'health-check':  { module: '../../../crons/health-check',    fn: 'runHealthCheck' },
 };
 
 export default async function handler(req, res) {
