@@ -43,7 +43,7 @@
     "react-dom": "^18",
     "remotion": "^4.0.441",
     "telegraf": "^4.16.3",
-    "three": "^0.183.2"
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
