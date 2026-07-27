@@ -1,16 +1,17 @@
-const { getCurrentUser, hashPassword } = require('../../../lib/auth');
-const { getDb } = require('../../../lib/db');
-const { checkAccess } = require('../../../lib/roles');
+const { getCurrentUser, hashPassword } = require('../../../lib/auth')
+const { getDb } = require('../../../lib/db')
+const { checkAccess } = require('../../../lib/roles')
+const { send500 } = require('../../../lib/api-error')
 
 export default async function handler(req, res) {
   try {
-    const user = await getCurrentUser(req);
-    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    const user = await getCurrentUser(req)
+    if (!user) return res.status(401).json({ error: 'Not authenticated' })
     if (!checkAccess(user, 'admin')) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+      return res.status(403).json({ error: 'Insufficient permissions' })
     }
 
-    const sql = getDb();
+    const sql = getDb()
 
     // GET — list all dashboard users
     if (req.method === 'GET') {
@@ -21,49 +22,61 @@ export default async function handler(req, res) {
         FROM dashboard_users du
         LEFT JOIN users u ON u.id = du.linked_redmine_user_id
         ORDER BY du.display_name ASC
-      `;
-      return res.status(200).json({ users });
+      `
+      return res.status(200).json({ users })
     }
 
     // POST — create new dashboard user
     if (req.method === 'POST') {
-      const { username, password, display_name, role, team, telegram_id, linked_redmine_user_id } = req.body;
+      const { username, password, display_name, role, team, telegram_id, linked_redmine_user_id } =
+        req.body
 
       if (!username || !password || !display_name) {
-        return res.status(400).json({ error: 'username, password, and display_name are required' });
+        return res.status(400).json({ error: 'username, password, and display_name are required' })
       }
 
       // Check if username already exists
       const existing = await sql`
         SELECT id FROM dashboard_users WHERE username = ${username} LIMIT 1
-      `;
+      `
       if (existing.length > 0) {
-        return res.status(409).json({ error: 'Username already exists' });
+        return res.status(409).json({ error: 'Username already exists' })
       }
 
-      const password_hash = await hashPassword(password);
+      const password_hash = await hashPassword(password)
 
       // If linked to a Redmine user, copy their email over so profile + forgot-password flow has it.
-      let linkedEmail = null;
+      let linkedEmail = null
       if (linked_redmine_user_id) {
-        const u = await sql`SELECT email FROM users WHERE id = ${linked_redmine_user_id} LIMIT 1`;
-        linkedEmail = u[0]?.email || null;
+        const u = await sql`SELECT email FROM users WHERE id = ${linked_redmine_user_id} LIMIT 1`
+        linkedEmail = u[0]?.email || null
       }
 
       const result = await sql`
         INSERT INTO dashboard_users (username, password_hash, display_name, role, team, telegram_id, linked_redmine_user_id, email, active, created_at)
         VALUES (${username}, ${password_hash}, ${display_name}, ${role || 'team_lead'}, ${team || null}, ${telegram_id || null}, ${linked_redmine_user_id || null}, ${linkedEmail}, true, NOW())
         RETURNING id, username, display_name, role, team, telegram_id, email, active
-      `;
+      `
 
-      return res.status(201).json({ user: result[0] });
+      return res.status(201).json({ user: result[0] })
     }
 
     // PUT — update existing dashboard user
     if (req.method === 'PUT') {
-      const { id, role, team, active, telegram_id, display_name, behavior_profile, top_concerns, response_style, morning_briefing } = req.body;
+      const {
+        id,
+        role,
+        team,
+        active,
+        telegram_id,
+        display_name,
+        behavior_profile,
+        top_concerns,
+        response_style,
+        morning_briefing,
+      } = req.body
 
-      if (!id) return res.status(400).json({ error: 'User id is required' });
+      if (!id) return res.status(400).json({ error: 'User id is required' })
 
       await sql`
         UPDATE dashboard_users
@@ -78,14 +91,14 @@ export default async function handler(req, res) {
           top_concerns = COALESCE(${top_concerns || null}, top_concerns),
           behavior_profile = COALESCE(${behavior_profile ? JSON.stringify(behavior_profile) : null}::jsonb, behavior_profile)
         WHERE id = ${id}
-      `;
+      `
 
-      return res.status(200).json({ ok: true });
+      return res.status(200).json({ ok: true })
     }
 
-    return res.status(405).end();
+    return res.status(405).end()
   } catch (err) {
-    console.error('Dashboard users admin error:', err);
-    res.status(500).json({ error: err.message });
+    console.error('Dashboard users admin error:', err)
+    send500(res, err, 'dashboard-users')
   }
 }

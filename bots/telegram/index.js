@@ -4,146 +4,162 @@
  * Handles authentication, AI conversation with tool calling, and message chunking.
  */
 
-const { Telegraf } = require('telegraf');
-const { getDb } = require('../../lib/db');
-const { chat } = require('../../lib/ai');
-const { getRecentMessages, saveMessage, getRedis } = require('../../lib/redis');
-const { tools } = require('../../lib/gpt-tools');
-const { executeToolCall } = require('../../lib/gpt-executor');
-const { buildSystemPrompt } = require('./prompt');
+const { Telegraf } = require('telegraf')
+const { getDb } = require('../../lib/db')
+const { chat } = require('../../lib/ai')
+const { getRecentMessages, saveMessage, getRedis } = require('../../lib/redis')
+const { tools } = require('../../lib/gpt-tools')
+const { executeToolCall } = require('../../lib/gpt-executor')
+const { buildSystemPrompt } = require('./prompt')
 const {
-  startOnboarding, handleOnboardingCallback, handleOnboardingText,
-  sendDeveloperConsent, recordConsent, revokeConsent,
-} = require('./onboarding');
-const { handleIntimationCallback } = require('./handlers/intimation');
-const { getOpenThreadForTarget, logEvent, transitionStatus, relayResponse } = require('../../lib/intimation-relay');
-const { extractCommitment, createCommitment } = require('../../lib/commitments');
+  startOnboarding,
+  handleOnboardingCallback,
+  handleOnboardingText,
+  sendDeveloperConsent,
+  recordConsent,
+  revokeConsent,
+} = require('./onboarding')
+const { handleIntimationCallback } = require('./handlers/intimation')
+const {
+  getOpenThreadForTarget,
+  logEvent,
+  transitionStatus,
+  relayResponse,
+} = require('../../lib/intimation-relay')
+const { extractCommitment, createCommitment } = require('../../lib/commitments')
 
 // ── Initialize bot ──
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN)
 
 // ── Auth middleware: match telegram_id to dashboard_users ──
 bot.use(async (ctx, next) => {
   // Only process messages with a sender
-  const telegramId = ctx.from?.id;
-  if (!telegramId) return;
+  const telegramId = ctx.from?.id
+  if (!telegramId) return
 
   try {
-    const sql = getDb();
+    const sql = getDb()
     const users = await sql`
       SELECT * FROM dashboard_users
       WHERE telegram_id = ${String(telegramId)}
         AND active = true
       LIMIT 1
-    `;
+    `
 
     if (users.length === 0) {
       return ctx.reply(
         `❌ You are not registered in the Company OS dashboard.\n\n` +
-        `Share this with your admin to get access:\n` +
-        `Your Telegram ID: \`${telegramId}\``
-      );
+          `Share this with your admin to get access:\n` +
+          `Your Telegram ID: \`${telegramId}\``,
+      )
     }
 
-    ctx.botUser = users[0];
+    ctx.botUser = users[0]
 
     // Developer consent gate
     if (users[0].role === 'developer' && !users[0].consent_given_at) {
-      const txt = ctx.message?.text || '';
-      if (!['/start','/agree'].some(cmd => txt === cmd || txt.startsWith(cmd + ' '))) {
-        await ctx.reply('Please reply /agree first to continue.');
-        return;
+      const txt = ctx.message?.text || ''
+      if (!['/start', '/agree'].some((cmd) => txt === cmd || txt.startsWith(`${cmd} `))) {
+        await ctx.reply('Please reply /agree first to continue.')
+        return
       }
     }
 
-    return next();
+    return next()
   } catch (err) {
-    console.error('Telegram auth middleware error:', err);
-    return ctx.reply('⚠️ System error during authentication. Please try again later.');
+    console.error('Telegram auth middleware error:', err)
+    return ctx.reply('⚠️ System error during authentication. Please try again later.')
   }
-});
+})
 
 // ── /start command ──
 bot.start(async (ctx) => {
-  const user = ctx.botUser;
-  if (!user) return;
+  const user = ctx.botUser
+  if (!user) return
 
   // Developers get a consent screen first — not the full onboarding.
   if (user.role === 'developer') {
     if (!user.consent_given_at) {
-      await sendDeveloperConsent(ctx);
-      return;
+      await sendDeveloperConsent(ctx)
+      return
     }
     await ctx.reply(
       `Hi ${user.display_name || user.username}. You're registered. I'll send you intimations here from your manager or team lead — you can respond with the buttons or plain text.`,
-      { parse_mode: 'Markdown' }
-    );
-    return;
+      { parse_mode: 'Markdown' },
+    )
+    return
   }
 
-  const greeting = user.role === 'manager'
-    ? `Hello ${user.display_name || user.username}! 👋\n\nI'm your Company OS Intelligence Assistant. I have access to all teams and projects.\n\nYou can ask me things like:\n• "Show overdue tickets"\n• "Who hasn't logged time today?"\n• "Status of Project X"\n• "Prepare 1-on-1 for [Name]"\n• "Team health overview"`
-    : `Hello ${user.display_name || user.username}! 👋\n\nI'm your Company OS Assistant for the *${user.team}* team.\n\nYou can ask me things like:\n• "Show my team's open tickets"\n• "Who's on leave this week?"\n• "Time log status for today"\n• "Prepare 1-on-1 for [Name]"\n• "Team workload check"`;
+  const greeting =
+    user.role === 'manager'
+      ? `Hello ${user.display_name || user.username}! 👋\n\nI'm your Company OS Intelligence Assistant. I have access to all teams and projects.\n\nYou can ask me things like:\n• "Show overdue tickets"\n• "Who hasn't logged time today?"\n• "Status of Project X"\n• "Prepare 1-on-1 for [Name]"\n• "Team health overview"`
+      : `Hello ${user.display_name || user.username}! 👋\n\nI'm your Company OS Assistant for the *${user.team}* team.\n\nYou can ask me things like:\n• "Show my team's open tickets"\n• "Who's on leave this week?"\n• "Time log status for today"\n• "Prepare 1-on-1 for [Name]"\n• "Team workload check"`
 
-  await ctx.reply(greeting, { parse_mode: 'Markdown' });
+  await ctx.reply(greeting, { parse_mode: 'Markdown' })
 
   // Trigger onboarding if not done yet
   if (!user.onboarding_completed) {
     setTimeout(async () => {
-      try { await startOnboarding(ctx, user); } catch (e) { console.error('Onboarding error:', e.message); }
-    }, 1200);
+      try {
+        await startOnboarding(ctx, user)
+      } catch (e) {
+        console.error('Onboarding error:', e.message)
+      }
+    }, 1200)
   }
-});
+})
 
 // ── /preferences command — restart onboarding ──
 bot.command('preferences', async (ctx) => {
-  const user = ctx.botUser;
-  if (!user) return;
+  const user = ctx.botUser
+  if (!user) return
   try {
-    const r = getRedis();
-    await r.del(`onboard:${user.id}`);
-  } catch (e) { /* ignore */ }
-  await startOnboarding(ctx, user);
-});
+    const r = getRedis()
+    await r.del(`onboard:${user.id}`)
+  } catch (_e) {
+    /* ignore */
+  }
+  await startOnboarding(ctx, user)
+})
 
 bot.command('agree', async (ctx) => {
-  const user = ctx.botUser;
-  if (!user || user.role !== 'developer') {
-    return ctx.reply('This command is only for developer accounts.');
+  const user = ctx.botUser
+  if (user?.role !== 'developer') {
+    return ctx.reply('This command is only for developer accounts.')
   }
-  await recordConsent(user.id);
-  await ctx.reply('✓ Thanks — consent recorded. You\'ll now receive intimations here.');
-});
+  await recordConsent(user.id)
+  await ctx.reply("✓ Thanks — consent recorded. You'll now receive intimations here.")
+})
 
 bot.command('revoke', async (ctx) => {
-  const user = ctx.botUser;
-  if (!user || user.role !== 'developer') {
-    return ctx.reply('This command is only for developer accounts.');
+  const user = ctx.botUser
+  if (user?.role !== 'developer') {
+    return ctx.reply('This command is only for developer accounts.')
   }
-  await revokeConsent(user.id);
-  await ctx.reply('Consent revoked. I won\'t relay messages to/from you until you run /agree again.');
-});
+  await revokeConsent(user.id)
+  await ctx.reply("Consent revoked. I won't relay messages to/from you until you run /agree again.")
+})
 
 // ── Callback query handler (onboarding buttons) ──
 bot.on('callback_query', async (ctx) => {
-  const user = ctx.botUser;
-  if (!user) return ctx.answerCbQuery('Not registered');
+  const user = ctx.botUser
+  if (!user) return ctx.answerCbQuery('Not registered')
   try {
     // Intimation callbacks (prefix 'int:') take priority over onboarding
     try {
-      const intHandled = await handleIntimationCallback(ctx, user);
-      if (intHandled) return;
+      const intHandled = await handleIntimationCallback(ctx, user)
+      if (intHandled) return
     } catch (e) {
-      console.error('Intimation callback error:', e.message);
+      console.error('Intimation callback error:', e.message)
     }
 
-    const handled = await handleOnboardingCallback(ctx, user);
-    if (!handled) await ctx.answerCbQuery();
+    const handled = await handleOnboardingCallback(ctx, user)
+    if (!handled) await ctx.answerCbQuery()
   } catch (e) {
-    console.error('Callback query error:', e.message);
-    await ctx.answerCbQuery('Something went wrong');
+    console.error('Callback query error:', e.message)
+    await ctx.answerCbQuery('Something went wrong')
   }
-});
+})
 
 // ── /help command ──
 bot.help(async (ctx) => {
@@ -161,19 +177,19 @@ bot.help(async (ctx) => {
 • Team health and capacity
 • Leave schedules
 
-Just type your question!`;
+Just type your question!`
 
-  return ctx.reply(helpText, { parse_mode: 'Markdown' });
-});
+  return ctx.reply(helpText, { parse_mode: 'Markdown' })
+})
 
 // ── /status quick command ──
 bot.command('status', async (ctx) => {
-  const user = ctx.botUser;
-  if (!user) return;
+  const user = ctx.botUser
+  if (!user) return
 
   try {
-    const sql = getDb();
-    const isManager = user.role === 'manager';
+    const sql = getDb()
+    const isManager = user.role === 'manager'
 
     const [overdueResult, missingLogsResult, leaveResult] = await Promise.all([
       isManager
@@ -217,63 +233,63 @@ bot.command('status', async (ctx) => {
             WHERE CURRENT_DATE BETWEEN lr.start_date AND lr.end_date
               AND u.team = ${user.team}
           `,
-    ]);
+    ])
 
-    const overdue = parseInt(overdueResult[0]?.count || 0);
-    const missing = parseInt(missingLogsResult[0]?.count || 0);
-    const onLeave = parseInt(leaveResult[0]?.count || 0);
+    const overdue = parseInt(overdueResult[0]?.count || 0, 10)
+    const missing = parseInt(missingLogsResult[0]?.count || 0, 10)
+    const onLeave = parseInt(leaveResult[0]?.count || 0, 10)
 
-    const scope = isManager ? 'Organization' : `${user.team} Team`;
-    const overdueEmoji = overdue > 0 ? '🔴' : '🟢';
-    const missingEmoji = missing > 0 ? '🟡' : '🟢';
+    const scope = isManager ? 'Organization' : `${user.team} Team`
+    const overdueEmoji = overdue > 0 ? '🔴' : '🟢'
+    const missingEmoji = missing > 0 ? '🟡' : '🟢'
 
     const statusText = `📊 *${scope} Quick Status*
 
 ${overdueEmoji} Overdue Tickets: *${overdue}*
 ${missingEmoji} Missing Time Log Today: *${missing}*
-🏖️ On Leave Today: *${onLeave}*`;
+🏖️ On Leave Today: *${onLeave}*`
 
-    return ctx.reply(statusText, { parse_mode: 'Markdown' });
+    return ctx.reply(statusText, { parse_mode: 'Markdown' })
   } catch (err) {
-    console.error('Status command error:', err);
-    return ctx.reply('⚠️ Could not fetch status. Please try again.');
+    console.error('Status command error:', err)
+    return ctx.reply('⚠️ Could not fetch status. Please try again.')
   }
-});
+})
 
 // ── Main message handler ──
 bot.on('text', async (ctx) => {
-  const user = ctx.botUser;
-  if (!user) return;
+  const user = ctx.botUser
+  if (!user) return
 
   // Check if this text is part of the onboarding flow (e.g. challenge step free text)
   try {
-    const onboardHandled = await handleOnboardingText(ctx, user);
-    if (onboardHandled) return;
+    const onboardHandled = await handleOnboardingText(ctx, user)
+    if (onboardHandled) return
   } catch (e) {
-    console.error('Onboarding text check error:', e.message);
+    console.error('Onboarding text check error:', e.message)
   }
 
   // Thread continuation: if this user is a developer with an open thread and sends free text,
   // treat it as a reply on that thread (provided last activity was within 2 hours).
   if (user.role === 'developer') {
     try {
-      const sql = require('../../lib/db').getDb();
-      const open = await getOpenThreadForTarget(user.id);
+      const sql = require('../../lib/db').getDb()
+      const open = await getOpenThreadForTarget(user.id)
       if (open) {
-        const lastMs = new Date(open.last_event_at).getTime();
+        const lastMs = new Date(open.last_event_at).getTime()
         if (Date.now() - lastMs <= 2 * 60 * 60 * 1000) {
-          const text = ctx.message.text;
+          const text = ctx.message.text
           await logEvent({
             thread_id: open.id,
             actor_id: user.id,
             event_type: 'text_reply',
             payload: { text },
-          });
-          await transitionStatus(open.id, 'replied');
+          })
+          await transitionStatus(open.id, 'replied')
 
           // Extract commitment (best-effort)
           try {
-            const commit = await extractCommitment({ text, now: new Date() });
+            const commit = await extractCommitment({ text, now: new Date() })
             if (commit) {
               await createCommitment({
                 thread_id: open.id,
@@ -281,85 +297,93 @@ bot.on('text', async (ctx) => {
                 issue_id: open.issue_id,
                 promise_text: commit.promise_text,
                 due_at: commit.due_at,
-              });
+              })
             }
-          } catch (e) { console.error('commit extract in thread reply:', e.message); }
+          } catch (e) {
+            console.error('commit extract in thread reply:', e.message)
+          }
 
           const originatorRows = await sql`
             SELECT id, display_name, telegram_id FROM dashboard_users WHERE id = ${open.originator_id} LIMIT 1
-          `;
-          const ccRows = open.cc_user_id ? await sql`
+          `
+          const ccRows = open.cc_user_id
+            ? await sql`
             SELECT id, display_name, telegram_id FROM dashboard_users WHERE id = ${open.cc_user_id} LIMIT 1
-          ` : [];
-          const issueRows = await sql`SELECT redmine_id FROM issues WHERE id = ${open.issue_id} LIMIT 1`;
+          `
+            : []
+          const issueRows =
+            await sql`SELECT redmine_id FROM issues WHERE id = ${open.issue_id} LIMIT 1`
 
           await relayResponse({
-            thread: { redmine_id: issueRows[0]?.redmine_id, target_display_name: user.display_name || user.username },
+            thread: {
+              redmine_id: issueRows[0]?.redmine_id,
+              target_display_name: user.display_name || user.username,
+            },
             originator: originatorRows[0],
             cc: ccRows[0] || null,
             responseText: text,
-          });
+          })
           await logEvent({
             thread_id: open.id,
             actor_id: user.id,
             event_type: 'relayed_to_originator',
             payload: { text_preview: text.slice(0, 100) },
-          });
+          })
 
-          await ctx.reply('✓ Relayed your reply to the originator.');
-          return; // stop: don't run AI pipeline
+          await ctx.reply('✓ Relayed your reply to the originator.')
+          return // stop: don't run AI pipeline
         }
       }
     } catch (e) {
-      console.error('thread continuation check error:', e.message);
+      console.error('thread continuation check error:', e.message)
     }
   }
 
-  const message = ctx.message.text;
+  const message = ctx.message.text
 
   // Show "typing" indicator
-  await ctx.sendChatAction('typing');
+  await ctx.sendChatAction('typing')
 
   try {
     // Get recent context from Redis
-    let recent = [];
+    let recent = []
     try {
-      recent = await getRecentMessages(user.id);
+      recent = await getRecentMessages(user.id)
     } catch (e) {
-      console.error('Redis getRecentMessages error:', e.message);
+      console.error('Redis getRecentMessages error:', e.message)
     }
 
     // Build system prompt based on role
-    const systemPrompt = buildSystemPrompt(user);
+    const systemPrompt = buildSystemPrompt(user)
 
     // Build messages array
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...recent.map(m => ({ role: m.role, content: m.content })),
+      ...recent.map((m) => ({ role: m.role, content: m.content })),
       { role: 'user', content: message },
-    ];
+    ]
 
     // Call AI with tools
-    let response = await chat(messages, tools);
-    let reply = response.choices[0].message;
+    const response = await chat(messages, tools)
+    let reply = response.choices[0].message
 
     // Handle tool calls — support up to 3 rounds of tool calling
-    let toolRounds = 0;
-    const MAX_TOOL_ROUNDS = 3;
+    let toolRounds = 0
+    const MAX_TOOL_ROUNDS = 3
 
     while (reply.tool_calls && reply.tool_calls.length > 0 && toolRounds < MAX_TOOL_ROUNDS) {
-      toolRounds++;
+      toolRounds++
 
       // Push the assistant message with tool_calls into the conversation
-      messages.push(reply);
+      messages.push(reply)
 
       // Execute each tool call
       for (const tc of reply.tool_calls) {
-        let args = {};
+        let args = {}
         try {
-          args = JSON.parse(tc.function.arguments);
-        } catch (e) {
-          args = {};
+          args = JSON.parse(tc.function.arguments)
+        } catch (_e) {
+          args = {}
         }
 
         const result = await executeToolCall(tc.function.name, args, {
@@ -368,40 +392,52 @@ bot.on('text', async (ctx) => {
           team: user.team,
           display_name: user.display_name,
           linked_redmine_user_id: user.linked_redmine_user_id,
-        });
+        })
 
         // Intercept propose_intimation confirmations: bot renders the preview card itself.
         if (tc.function.name === 'propose_intimation') {
           try {
-            const parsed = JSON.parse(result);
+            const parsed = JSON.parse(result)
             if (parsed.confirm_required && parsed.preview) {
-              const p = parsed.preview;
-              const overdueBit = (p.days_overdue && p.days_overdue > 0) ? ` (overdue ${p.days_overdue}d)` : '';
-              const noteBit = p.note ? `\n\n_${p.note}_` : '';
-              const text = `Send this to *${p.target_display_name}*?\n\n[TK-${p.issue_redmine_id}](https://redmine.thinkingcode.com/issues/${p.issue_redmine_id}) '${p.issue_subject}'${overdueBit}.${noteBit}`;
+              const p = parsed.preview
+              const overdueBit =
+                p.days_overdue && p.days_overdue > 0 ? ` (overdue ${p.days_overdue}d)` : ''
+              const noteBit = p.note ? `\n\n_${p.note}_` : ''
+              const text = `Send this to *${p.target_display_name}*?\n\n[TK-${p.issue_redmine_id}](https://redmine.thinkingcode.com/issues/${p.issue_redmine_id}) '${p.issue_subject}'${overdueBit}.${noteBit}`
               await ctx.reply(text, {
                 parse_mode: 'Markdown',
                 reply_markup: {
-                  inline_keyboard: [[
-                    { text: 'Yes, send', callback_data: `int:confirm:${p.target_user_id}:${p.issue_id}` },
-                    { text: 'Cancel', callback_data: 'int:cancel' },
-                  ]],
+                  inline_keyboard: [
+                    [
+                      {
+                        text: 'Yes, send',
+                        callback_data: `int:confirm:${p.target_user_id}:${p.issue_id}`,
+                      },
+                      { text: 'Cancel', callback_data: 'int:cancel' },
+                    ],
+                  ],
                 },
-              });
-              try { await saveMessage(user.id, 'user', message); } catch (e) { /* ignore */ }
-              return;
+              })
+              try {
+                await saveMessage(user.id, 'user', message)
+              } catch (_e) {
+                /* ignore */
+              }
+              return
             }
             if (parsed.ambiguous && Array.isArray(parsed.candidates)) {
-              const lines = parsed.candidates.map((c, i) => `${i + 1}. ${c.display_name} (${c.team || '—'})`).join('\n');
-              await ctx.reply(`Multiple matches — which one?\n${lines}\n\n_Reply with the name_`);
-              return;
+              const lines = parsed.candidates
+                .map((c, i) => `${i + 1}. ${c.display_name} (${c.team || '—'})`)
+                .join('\n')
+              await ctx.reply(`Multiple matches — which one?\n${lines}\n\n_Reply with the name_`)
+              return
             }
             if (parsed.error) {
-              await ctx.reply(parsed.error);
-              return;
+              await ctx.reply(parsed.error)
+              return
             }
           } catch (e) {
-            console.error('propose_intimation intercept parse error:', e.message);
+            console.error('propose_intimation intercept parse error:', e.message)
             // fall through — let AI handle the result normally
           }
         }
@@ -410,63 +446,63 @@ bot.on('text', async (ctx) => {
           role: 'tool',
           tool_call_id: tc.id,
           content: result,
-        });
+        })
       }
 
       // Re-send typing indicator for subsequent rounds
-      await ctx.sendChatAction('typing');
+      await ctx.sendChatAction('typing')
 
       // Call AI again with tool results
-      const followUp = await chat(messages, tools);
-      reply = followUp.choices[0].message;
+      const followUp = await chat(messages, tools)
+      reply = followUp.choices[0].message
     }
 
     // If AI still has no text after tool rounds (stuck in tool-call mode), force a text-only response
-    let replyText = reply.content;
+    let replyText = reply.content
     if (!replyText || replyText.trim() === '') {
       try {
-        await ctx.sendChatAction('typing');
-        const forced = await chat(messages, null, null); // no tools = forces text
-        replyText = forced.choices[0].message.content;
+        await ctx.sendChatAction('typing')
+        const forced = await chat(messages, null, null) // no tools = forces text
+        replyText = forced.choices[0].message.content
       } catch (e) {
-        console.error('Forced text fallback error:', e.message);
+        console.error('Forced text fallback error:', e.message)
       }
     }
     if (!replyText || replyText.trim() === '') {
-      replyText = '⚠️ I processed your request but couldn\'t generate a summary. Please try rephrasing.';
+      replyText =
+        "⚠️ I processed your request but couldn't generate a summary. Please try rephrasing."
     }
 
     // Save to Redis
     try {
-      await saveMessage(user.id, 'user', message);
-      await saveMessage(user.id, 'assistant', replyText);
+      await saveMessage(user.id, 'user', message)
+      await saveMessage(user.id, 'assistant', replyText)
     } catch (e) {
-      console.error('Redis saveMessage error:', e.message);
+      console.error('Redis saveMessage error:', e.message)
     }
 
     // Save to persistent chat_history in DB
     try {
-      const sql = getDb();
+      const sql = getDb()
       await sql`
         INSERT INTO chat_history (user_id, role, content, metadata, role_at_time, created_at)
         VALUES (${user.id}, 'user', ${message}, ${JSON.stringify({ source: 'telegram', telegram_id: String(ctx.from.id) })}, ${user.role}, NOW())
-      `;
+      `
       await sql`
         INSERT INTO chat_history (user_id, role, content, metadata, role_at_time, created_at)
         VALUES (${user.id}, 'assistant', ${replyText}, ${JSON.stringify({ source: 'telegram', tool_rounds: toolRounds })}, ${user.role}, NOW())
-      `;
+      `
     } catch (e) {
-      console.error('DB chat_history insert error:', e.message);
+      console.error('DB chat_history insert error:', e.message)
     }
 
     // Send reply — chunk if needed (Telegram 4096 char limit)
-    await sendChunkedReply(ctx, replyText);
-
+    await sendChunkedReply(ctx, replyText)
   } catch (err) {
-    console.error('Telegram message handler error:', err);
-    await ctx.reply('⚠️ Sorry, something went wrong processing your message. Please try again.');
+    console.error('Telegram message handler error:', err)
+    await ctx.reply('⚠️ Sorry, something went wrong processing your message. Please try again.')
   }
-});
+})
 
 /**
  * Send a reply, chunking at 4096 characters if needed.
@@ -475,58 +511,58 @@ bot.on('text', async (ctx) => {
 async function sendChunkedReply(ctx, text) {
   // Split into chunks respecting Telegram's 4096 char limit
   // Try to split at newlines to avoid breaking mid-sentence
-  const MAX_LEN = 4096;
+  const MAX_LEN = 4096
 
   if (text.length <= MAX_LEN) {
     try {
-      await ctx.reply(text, { parse_mode: 'Markdown' });
+      await ctx.reply(text, { parse_mode: 'Markdown' })
     } catch (e) {
       // Markdown parse error — send as plain text
-      if (e.description && e.description.includes("can't parse")) {
-        await ctx.reply(text);
+      if (e.description?.includes("can't parse")) {
+        await ctx.reply(text)
       } else {
-        throw e;
+        throw e
       }
     }
-    return;
+    return
   }
 
   // Chunk the message at line boundaries
-  const chunks = [];
-  let remaining = text;
+  const chunks = []
+  let remaining = text
 
   while (remaining.length > 0) {
     if (remaining.length <= MAX_LEN) {
-      chunks.push(remaining);
-      break;
+      chunks.push(remaining)
+      break
     }
 
     // Find the last newline within the limit
-    let splitIdx = remaining.lastIndexOf('\n', MAX_LEN);
+    let splitIdx = remaining.lastIndexOf('\n', MAX_LEN)
     if (splitIdx <= 0) {
       // No newline found — split at space
-      splitIdx = remaining.lastIndexOf(' ', MAX_LEN);
+      splitIdx = remaining.lastIndexOf(' ', MAX_LEN)
     }
     if (splitIdx <= 0) {
       // No space found — hard split
-      splitIdx = MAX_LEN;
+      splitIdx = MAX_LEN
     }
 
-    chunks.push(remaining.substring(0, splitIdx));
-    remaining = remaining.substring(splitIdx).trimStart();
+    chunks.push(remaining.substring(0, splitIdx))
+    remaining = remaining.substring(splitIdx).trimStart()
   }
 
   for (const chunk of chunks) {
     try {
-      await ctx.reply(chunk, { parse_mode: 'Markdown' });
+      await ctx.reply(chunk, { parse_mode: 'Markdown' })
     } catch (e) {
-      if (e.description && e.description.includes("can't parse")) {
-        await ctx.reply(chunk);
+      if (e.description?.includes("can't parse")) {
+        await ctx.reply(chunk)
       } else {
-        throw e;
+        throw e
       }
     }
   }
 }
 
-module.exports = { bot };
+module.exports = { bot }

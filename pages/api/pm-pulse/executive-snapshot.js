@@ -1,19 +1,24 @@
-import { getDb } from '../../../lib/db';
-const { getCurrentUser } = require('../../../lib/auth');
+import { getDb } from '../../../lib/db'
 
-const APPROVED_REDMINE_IDS = [2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76];
+const { getCurrentUser } = require('../../../lib/auth')
+const { send500 } = require('../../../lib/api-error')
+
+const APPROVED_REDMINE_IDS = [
+  2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
+  61, 62, 63, 65, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
+]
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'GET') return res.status(405).end()
 
   try {
-    const user = await getCurrentUser(req);
-    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    const user = await getCurrentUser(req)
+    if (!user) return res.status(401).json({ error: 'Not authenticated' })
 
-    const sql = getDb();
-    const isTeamLead = user.role === 'team_lead';
-    const team = user.team;
-    const closed = ['Closed', 'Resolved', 'Verified', 'Rejected'];
+    const sql = getDb()
+    const isTeamLead = user.role === 'team_lead'
+    const team = user.team
+    const _closed = ['Closed', 'Resolved', 'Verified', 'Rejected']
 
     const [managers, projects, developers] = await Promise.all([
       // Manager-wise active ticket counts (grouped by Delivery Owner)
@@ -87,11 +92,11 @@ export default async function handler(req, res) {
             GROUP BY u.name
             ORDER BY count DESC
             LIMIT 15`,
-    ]);
+    ])
 
-    res.status(200).json({ managers, projects, developers });
+    res.status(200).json({ managers, projects, developers })
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error(err)
+    send500(res, err, 'executive-snapshot')
   }
 }

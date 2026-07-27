@@ -1,12 +1,13 @@
-import { getDb } from '../../../lib/db';
-import { requireAdmin } from '../../../lib/admin';
+import { requireAdmin } from '../../../lib/admin'
+import { getDb } from '../../../lib/db'
+import { send500 } from '../../../lib/api-error'
 
 export default async function handler(req, res) {
-  const sql = getDb();
+  const sql = getDb()
 
   try {
-    const user = await requireAdmin(req, res);
-    if (!user) return;
+    const user = await requireAdmin(req, res)
+    if (!user) return
 
     if (req.method === 'GET') {
       const projects = await sql`
@@ -15,13 +16,13 @@ export default async function handler(req, res) {
         LEFT JOIN users u ON p.manager_id = u.id
         WHERE p.status = 'active'
         ORDER BY p.name
-      `;
-      return res.status(200).json({ projects });
+      `
+      return res.status(200).json({ projects })
     }
 
     if (req.method === 'PUT') {
-      const { id, manager_id } = req.body;
-      if (!id) return res.status(400).json({ error: 'Project ID is required' });
+      const { id, manager_id } = req.body
+      if (!id) return res.status(400).json({ error: 'Project ID is required' })
 
       const result = await sql`
         UPDATE projects 
@@ -30,14 +31,14 @@ export default async function handler(req, res) {
           updated_at = NOW()
         WHERE id = ${id}
         RETURNING id, name, manager_id
-      `;
+      `
 
-      return res.status(200).json({ project: result[0] });
+      return res.status(200).json({ project: result[0] })
     }
 
-    res.status(405).end();
+    res.status(405).end()
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error(err)
+    send500(res, err, 'admin-projects')
   }
 }

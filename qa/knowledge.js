@@ -3,19 +3,19 @@
  * Knowledge base: semantic search over project Q&A and adding new entries.
  */
 
-const { getDb, formatVector } = require('../lib/db');
-const { embed } = require('../lib/ai');
+const { getDb, formatVector } = require('../lib/db')
+const { embed } = require('../lib/ai')
 
 // ────────────────────────────────────────────────────────────────
 // searchKnowledgeBase — Semantic search for answered Q&A
 // ────────────────────────────────────────────────────────────────
 async function searchKnowledgeBase(query, projectId) {
-  const sql = getDb();
+  const sql = getDb()
 
   try {
-    if (!query || !query.trim()) return [];
+    if (!query?.trim()) return []
 
-    const embedding = await embed(query);
+    const embedding = await embed(query)
 
     if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
       // Fallback to text search if embedding unavailable
@@ -27,13 +27,13 @@ async function searchKnowledgeBase(query, projectId) {
             AND answer IS NOT NULL
             AND status = 'answered'
             AND (
-              question ILIKE ${'%' + query + '%'}
-              OR answer ILIKE ${'%' + query + '%'}
+              question ILIKE ${`%${query}%`}
+              OR answer ILIKE ${`%${query}%`}
             )
           ORDER BY answered_at DESC
           LIMIT 5
-        `;
-        return rows || [];
+        `
+        return rows || []
       }
 
       const rows = await sql`
@@ -42,17 +42,17 @@ async function searchKnowledgeBase(query, projectId) {
         WHERE answer IS NOT NULL
           AND status = 'answered'
           AND (
-            question ILIKE ${'%' + query + '%'}
-            OR answer ILIKE ${'%' + query + '%'}
+            question ILIKE ${`%${query}%`}
+            OR answer ILIKE ${`%${query}%`}
           )
         ORDER BY answered_at DESC
         LIMIT 5
-      `;
-      return rows || [];
+      `
+      return rows || []
     }
 
     // Semantic search with embedding
-    const vector = formatVector(embedding);
+    const vector = formatVector(embedding)
 
     if (projectId) {
       // Use the match_project_qa function (project-scoped)
@@ -71,8 +71,8 @@ async function searchKnowledgeBase(query, projectId) {
           AND 1 - (answer_embedding <=> ${vector}::vector) > 0.75
         ORDER BY similarity DESC
         LIMIT 5
-      `;
-      return rows || [];
+      `
+      return rows || []
     }
 
     // Global search (all projects)
@@ -91,11 +91,11 @@ async function searchKnowledgeBase(query, projectId) {
         AND 1 - (answer_embedding <=> ${vector}::vector) > 0.75
       ORDER BY similarity DESC
       LIMIT 5
-    `;
-    return rows || [];
+    `
+    return rows || []
   } catch (err) {
-    console.error('knowledge.searchKnowledgeBase: error:', err.message);
-    return [];
+    console.error('knowledge.searchKnowledgeBase: error:', err.message)
+    return []
   }
 }
 
@@ -103,32 +103,32 @@ async function searchKnowledgeBase(query, projectId) {
 // addToKnowledgeBase — Insert a new Q&A pair
 // ────────────────────────────────────────────────────────────────
 async function addToKnowledgeBase(projectId, question, answer, userId) {
-  const sql = getDb();
+  const sql = getDb()
 
   try {
-    if (!question || !question.trim()) {
-      return { error: 'Question is required' };
+    if (!question?.trim()) {
+      return { error: 'Question is required' }
     }
 
     // Embed question
-    const questionEmbedding = await embed(question);
+    const questionEmbedding = await embed(question)
     const qVector =
       questionEmbedding && Array.isArray(questionEmbedding) && questionEmbedding.length > 0
         ? formatVector(questionEmbedding)
-        : null;
+        : null
 
     // Embed answer (if provided)
-    let aVector = null;
-    if (answer && answer.trim()) {
-      const answerEmbedding = await embed(answer);
+    let aVector = null
+    if (answer?.trim()) {
+      const answerEmbedding = await embed(answer)
       if (answerEmbedding && Array.isArray(answerEmbedding) && answerEmbedding.length > 0) {
-        aVector = formatVector(answerEmbedding);
+        aVector = formatVector(answerEmbedding)
       }
     }
 
-    const status = answer && answer.trim() ? 'answered' : 'pending';
+    const status = answer?.trim() ? 'answered' : 'pending'
 
-    let insertRows;
+    let insertRows
 
     if (qVector && aVector) {
       insertRows = await sql`
@@ -147,7 +147,7 @@ async function addToKnowledgeBase(projectId, question, answer, userId) {
           ${status}
         )
         RETURNING id
-      `;
+      `
     } else if (qVector) {
       insertRows = await sql`
         INSERT INTO project_qa (
@@ -164,7 +164,7 @@ async function addToKnowledgeBase(projectId, question, answer, userId) {
           ${status}
         )
         RETURNING id
-      `;
+      `
     } else {
       insertRows = await sql`
         INSERT INTO project_qa (
@@ -180,18 +180,18 @@ async function addToKnowledgeBase(projectId, question, answer, userId) {
           ${status}
         )
         RETURNING id
-      `;
+      `
     }
 
-    const qaId = insertRows && insertRows[0] ? insertRows[0].id : null;
-    return { id: qaId, status, success: true };
+    const qaId = insertRows?.[0] ? insertRows[0].id : null
+    return { id: qaId, status, success: true }
   } catch (err) {
-    console.error('knowledge.addToKnowledgeBase: error:', err.message);
-    return { error: err.message };
+    console.error('knowledge.addToKnowledgeBase: error:', err.message)
+    return { error: err.message }
   }
 }
 
 module.exports = {
   searchKnowledgeBase,
   addToKnowledgeBase,
-};
+}

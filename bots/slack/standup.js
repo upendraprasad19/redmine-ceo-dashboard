@@ -5,8 +5,8 @@
  * their active tickets with inline status controls.
  */
 
-const { getDb } = require('../../lib/db');
-const { sendDirectMessage } = require('./index');
+const { getDb } = require('../../lib/db')
+const { sendDirectMessage } = require('./index')
 
 /**
  * Build Block Kit blocks for a single developer's standup card.
@@ -15,7 +15,7 @@ const { sendDirectMessage } = require('./index');
  * @returns {Array} Slack Block Kit blocks
  */
 function buildStandupBlocks(devName, tickets) {
-  const blocks = [];
+  const blocks = []
 
   // ── Header ──
   blocks.push({
@@ -25,7 +25,7 @@ function buildStandupBlocks(devName, tickets) {
       text: `Good morning ${devName}! Here are your active tickets:`,
       emoji: true,
     },
-  });
+  })
 
   blocks.push({
     type: 'context',
@@ -35,9 +35,9 @@ function buildStandupBlocks(devName, tickets) {
         text: `:calendar: *${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}*  |  ${tickets.length} active ticket${tickets.length !== 1 ? 's' : ''}`,
       },
     ],
-  });
+  })
 
-  blocks.push({ type: 'divider' });
+  blocks.push({ type: 'divider' })
 
   if (tickets.length === 0) {
     blocks.push({
@@ -46,35 +46,40 @@ function buildStandupBlocks(devName, tickets) {
         type: 'mrkdwn',
         text: ':white_check_mark: No active tickets assigned to you right now. Enjoy your day!',
       },
-    });
-    return blocks;
+    })
+    return blocks
   }
 
   // ── Ticket cards (max 10 to stay within Slack block limits) ──
-  const displayTickets = tickets.slice(0, 10);
+  const displayTickets = tickets.slice(0, 10)
 
   for (const ticket of displayTickets) {
-    const ticketId = ticket.redmine_id ? `TK-${ticket.redmine_id}` : `#${ticket.id}`;
-    const isOverdue = ticket.due_date && new Date(ticket.due_date) < new Date() && !['Closed', 'Resolved'].includes(ticket.status);
+    const ticketId = ticket.redmine_id ? `TK-${ticket.redmine_id}` : `#${ticket.id}`
+    const isOverdue =
+      ticket.due_date &&
+      new Date(ticket.due_date) < new Date() &&
+      !['Closed', 'Resolved'].includes(ticket.status)
     const dueText = ticket.due_date
       ? new Date(ticket.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      : 'No due date';
-    const overdueEmoji = isOverdue ? ' :rotating_light:' : '';
+      : 'No due date'
+    const overdueEmoji = isOverdue ? ' :rotating_light:' : ''
 
-    const priorityEmoji = {
-      'Urgent': ':red_circle:',
-      'High': ':large_orange_circle:',
-      'Normal': ':large_blue_circle:',
-      'Low': ':white_circle:',
-    }[ticket.priority] || ':large_blue_circle:';
+    const priorityEmoji =
+      {
+        Urgent: ':red_circle:',
+        High: ':large_orange_circle:',
+        Normal: ':large_blue_circle:',
+        Low: ':white_circle:',
+      }[ticket.priority] || ':large_blue_circle:'
 
-    const statusEmoji = {
-      'New': ':new:',
-      'In Progress': ':arrows_counterclockwise:',
-      'Blocked': ':no_entry:',
-      'Feedback': ':speech_balloon:',
-      'Resolved': ':white_check_mark:',
-    }[ticket.status] || ':grey_question:';
+    const statusEmoji =
+      {
+        New: ':new:',
+        'In Progress': ':arrows_counterclockwise:',
+        Blocked: ':no_entry:',
+        Feedback: ':speech_balloon:',
+        Resolved: ':white_check_mark:',
+      }[ticket.status] || ':grey_question:'
 
     // Ticket info section with status dropdown accessory
     blocks.push({
@@ -92,18 +97,30 @@ function buildStandupBlocks(devName, tickets) {
         },
         initial_option: getStatusOption(ticket.status),
         options: [
-          { text: { type: 'plain_text', text: ':new: Not Started' }, value: `${ticket.id}|Not Started` },
-          { text: { type: 'plain_text', text: ':arrows_counterclockwise: In Progress' }, value: `${ticket.id}|In Progress` },
-          { text: { type: 'plain_text', text: ':no_entry: Blocked' }, value: `${ticket.id}|Blocked` },
-          { text: { type: 'plain_text', text: ':white_check_mark: Done' }, value: `${ticket.id}|Done` },
+          {
+            text: { type: 'plain_text', text: ':new: Not Started' },
+            value: `${ticket.id}|Not Started`,
+          },
+          {
+            text: { type: 'plain_text', text: ':arrows_counterclockwise: In Progress' },
+            value: `${ticket.id}|In Progress`,
+          },
+          {
+            text: { type: 'plain_text', text: ':no_entry: Blocked' },
+            value: `${ticket.id}|Blocked`,
+          },
+          {
+            text: { type: 'plain_text', text: ':white_check_mark: Done' },
+            value: `${ticket.id}|Done`,
+          },
         ],
       },
-    });
+    })
   }
 
   // ── "Mark all as Done" row if multiple tickets ──
   if (tickets.length > 1) {
-    blocks.push({ type: 'divider' });
+    blocks.push({ type: 'divider' })
   }
 
   // ── Remaining ticket count ──
@@ -116,11 +133,11 @@ function buildStandupBlocks(devName, tickets) {
           text: `:page_facing_up: _...and ${tickets.length - 10} more active tickets_`,
         },
       ],
-    });
+    })
   }
 
   // ── Action buttons ──
-  blocks.push({ type: 'divider' });
+  blocks.push({ type: 'divider' })
   blocks.push({
     type: 'actions',
     elements: [
@@ -131,9 +148,9 @@ function buildStandupBlocks(devName, tickets) {
         style: 'danger',
       },
     ],
-  });
+  })
 
-  return blocks;
+  return blocks
 }
 
 /**
@@ -141,14 +158,20 @@ function buildStandupBlocks(devName, tickets) {
  */
 function getStatusOption(status) {
   const map = {
-    'New': { text: { type: 'plain_text', text: ':new: Not Started' }, value: `0|Not Started` },
-    'In Progress': { text: { type: 'plain_text', text: ':arrows_counterclockwise: In Progress' }, value: `0|In Progress` },
-    'Blocked': { text: { type: 'plain_text', text: ':no_entry: Blocked' }, value: `0|Blocked` },
-    'Resolved': { text: { type: 'plain_text', text: ':white_check_mark: Done' }, value: `0|Done` },
-    'Closed': { text: { type: 'plain_text', text: ':white_check_mark: Done' }, value: `0|Done` },
-    'Feedback': { text: { type: 'plain_text', text: ':arrows_counterclockwise: In Progress' }, value: `0|In Progress` },
-  };
-  return map[status] || map['New'];
+    New: { text: { type: 'plain_text', text: ':new: Not Started' }, value: `0|Not Started` },
+    'In Progress': {
+      text: { type: 'plain_text', text: ':arrows_counterclockwise: In Progress' },
+      value: `0|In Progress`,
+    },
+    Blocked: { text: { type: 'plain_text', text: ':no_entry: Blocked' }, value: `0|Blocked` },
+    Resolved: { text: { type: 'plain_text', text: ':white_check_mark: Done' }, value: `0|Done` },
+    Closed: { text: { type: 'plain_text', text: ':white_check_mark: Done' }, value: `0|Done` },
+    Feedback: {
+      text: { type: 'plain_text', text: ':arrows_counterclockwise: In Progress' },
+      value: `0|In Progress`,
+    },
+  }
+  return map[status] || map.New
 }
 
 /**
@@ -157,8 +180,8 @@ function getStatusOption(status) {
  * @returns {object} { sent: number, errors: number, skipped: number }
  */
 async function sendStandup() {
-  const sql = getDb();
-  const stats = { sent: 0, errors: 0, skipped: 0 };
+  const sql = getDb()
+  const stats = { sent: 0, errors: 0, skipped: 0 }
 
   try {
     // Get all active dashboard users who have a slack_id linked and also have a linked Redmine user
@@ -173,19 +196,19 @@ async function sendStandup() {
       LEFT JOIN users u ON u.id = du.linked_redmine_user_id
       WHERE du.slack_id IS NOT NULL
         AND du.active = true
-    `;
+    `
 
     if (developers.length === 0) {
-      console.log('standup: No developers with slack_id found — skipping.');
-      return stats;
+      console.log('standup: No developers with slack_id found — skipping.')
+      return stats
     }
 
     for (const dev of developers) {
       try {
         if (!dev.linked_redmine_user_id) {
           // No linked Redmine user — can't look up tickets
-          stats.skipped++;
-          continue;
+          stats.skipped++
+          continue
         }
 
         // Fetch active tickets assigned to this developer
@@ -208,29 +231,32 @@ async function sendStandup() {
             i.priority = 'Urgent' DESC,
             i.priority = 'High' DESC,
             i.due_date ASC NULLS LAST
-        `;
+        `
 
-        const devName = dev.display_name || dev.redmine_name || 'Developer';
-        const blocks = buildStandupBlocks(devName, tickets);
-        const fallbackText = tickets.length > 0
-          ? `Good morning ${devName}! You have ${tickets.length} active ticket(s).`
-          : `Good morning ${devName}! No active tickets right now.`;
+        const devName = dev.display_name || dev.redmine_name || 'Developer'
+        const blocks = buildStandupBlocks(devName, tickets)
+        const fallbackText =
+          tickets.length > 0
+            ? `Good morning ${devName}! You have ${tickets.length} active ticket(s).`
+            : `Good morning ${devName}! No active tickets right now.`
 
-        await sendDirectMessage(dev.slack_id, fallbackText, blocks);
-        stats.sent++;
-
+        await sendDirectMessage(dev.slack_id, fallbackText, blocks)
+        stats.sent++
       } catch (devErr) {
-        console.error(`standup: Error sending to ${dev.display_name} (${dev.slack_id}):`, devErr.message);
-        stats.errors++;
+        console.error(
+          `standup: Error sending to ${dev.display_name} (${dev.slack_id}):`,
+          devErr.message,
+        )
+        stats.errors++
       }
     }
   } catch (err) {
-    console.error('standup: Fatal error:', err.message);
-    stats.errors++;
+    console.error('standup: Fatal error:', err.message)
+    stats.errors++
   }
 
-  console.log(`standup: Sent ${stats.sent}, errors ${stats.errors}, skipped ${stats.skipped}`);
-  return stats;
+  console.log(`standup: Sent ${stats.sent}, errors ${stats.errors}, skipped ${stats.skipped}`)
+  return stats
 }
 
-module.exports = { sendStandup, buildStandupBlocks };
+module.exports = { sendStandup, buildStandupBlocks }

@@ -3,23 +3,23 @@
  * 9:05 AM PM brief + 9:10 AM CEO brief — Telegram notifications.
  */
 
-const { getDb } = require('../lib/db');
+const { getDb } = require('../lib/db')
 
 /**
  * Get the Telegraf bot instance (lazy-loaded to avoid startup issues).
  */
 function getBot() {
-  const { bot } = require('../bots/telegram');
-  return bot;
+  const { bot } = require('../bots/telegram')
+  return bot
 }
 
 // ────────────────────────────────────────────────────────────────
 // sendCEOBrief — Morning brief for managers with org-wide overview
 // ────────────────────────────────────────────────────────────────
 async function sendCEOBrief() {
-  const sql = getDb();
-  const bot = getBot();
-  const results = { sent: 0, errors: 0 };
+  const sql = getDb()
+  const bot = getBot()
+  const results = { sent: 0, errors: 0 }
 
   try {
     // 1. Gather org-wide metrics
@@ -68,25 +68,26 @@ async function sendCEOBrief() {
         WHERE cs.current_workload_pct >= 90
           AND du.active = true
       `,
-    ]);
+    ])
 
-    const overdue = (overdueRows && overdueRows[0] && overdueRows[0].count) || 0;
-    const missingLogs = (missingLogRows && missingLogRows[0] && missingLogRows[0].count) || 0;
-    const onLeave = (leaveRows && leaveRows[0] && leaveRows[0].count) || 0;
-    const blocked = (blockedRows && blockedRows[0] && blockedRows[0].count) || 0;
-    const overloaded = (capacityRows && capacityRows[0] && capacityRows[0].count) || 0;
+    const overdue = overdueRows?.[0]?.count || 0
+    const missingLogs = missingLogRows?.[0]?.count || 0
+    const onLeave = leaveRows?.[0]?.count || 0
+    const blocked = blockedRows?.[0]?.count || 0
+    const overloaded = capacityRows?.[0]?.count || 0
 
     // 2. Format message with severity emojis
-    const overdueEmoji = overdue === 0 ? '\u2705' : overdue >= 5 ? '\ud83d\udd34' : '\ud83d\udfe1';
-    const logEmoji = missingLogs === 0 ? '\u2705' : missingLogs >= 5 ? '\ud83d\udd34' : '\ud83d\udfe1';
-    const blockedEmoji = blocked === 0 ? '\u2705' : '\ud83d\udd34';
-    const capacityEmoji = overloaded === 0 ? '\u2705' : '\ud83d\udfe1';
+    const overdueEmoji = overdue === 0 ? '\u2705' : overdue >= 5 ? '\ud83d\udd34' : '\ud83d\udfe1'
+    const logEmoji =
+      missingLogs === 0 ? '\u2705' : missingLogs >= 5 ? '\ud83d\udd34' : '\ud83d\udfe1'
+    const blockedEmoji = blocked === 0 ? '\u2705' : '\ud83d\udd34'
+    const capacityEmoji = overloaded === 0 ? '\u2705' : '\ud83d\udfe1'
 
     const today = new Date().toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'short',
       day: 'numeric',
-    });
+    })
 
     const message = `*\ud83d\udcca CEO Morning Brief — ${today}*
 
@@ -96,8 +97,8 @@ ${logEmoji} *Missing Time Logs:* ${missingLogs} people
 \ud83c\udfd6\ufe0f *On Leave:* ${onLeave}
 ${capacityEmoji} *Overloaded (>90%):* ${overloaded} people
 
-${overdue > 5 ? '\u26a0\ufe0f _Multiple overdue tickets require attention._\n' : ''}${blocked > 0 ? '\u26a0\ufe0f _' + blocked + ' ticket(s) are blocked and need unblocking._\n' : ''}${missingLogs > 5 ? '\u26a0\ufe0f _Several team members missing time logs._\n' : ''}
-_Use /status for real-time details._`;
+${overdue > 5 ? '\u26a0\ufe0f _Multiple overdue tickets require attention._\n' : ''}${blocked > 0 ? `\u26a0\ufe0f _${blocked} ticket(s) are blocked and need unblocking._\n` : ''}${missingLogs > 5 ? '\u26a0\ufe0f _Several team members missing time logs._\n' : ''}
+_Use /status for real-time details._`
 
     // 3. Send to all managers via Telegram
     const managers = await sql`
@@ -106,34 +107,34 @@ _Use /status for real-time details._`;
       WHERE role = 'manager'
         AND active = true
         AND telegram_id IS NOT NULL
-    `;
+    `
 
-    for (const mgr of (managers || [])) {
+    for (const mgr of managers || []) {
       try {
-        await bot.telegram.sendMessage(mgr.telegram_id, message, { parse_mode: 'Markdown' });
-        results.sent++;
+        await bot.telegram.sendMessage(mgr.telegram_id, message, { parse_mode: 'Markdown' })
+        results.sent++
       } catch (sendErr) {
-        console.error(`[CRON] CEO brief: failed to send to ${mgr.display_name}:`, sendErr.message);
-        results.errors++;
+        console.error(`[CRON] CEO brief: failed to send to ${mgr.display_name}:`, sendErr.message)
+        results.errors++
       }
     }
 
-    console.log('[CRON] CEO Brief completed:', JSON.stringify(results));
+    console.log('[CRON] CEO Brief completed:', JSON.stringify(results))
   } catch (err) {
-    console.error('[CRON] CEO Brief failed:', err.message);
-    results.errors++;
+    console.error('[CRON] CEO Brief failed:', err.message)
+    results.errors++
   }
 
-  return results;
+  return results
 }
 
 // ────────────────────────────────────────────────────────────────
 // sendPMBriefs — Morning brief for each team lead with team-specific data
 // ────────────────────────────────────────────────────────────────
 async function sendPMBriefs() {
-  const sql = getDb();
-  const bot = getBot();
-  const results = { sent: 0, errors: 0 };
+  const sql = getDb()
+  const bot = getBot()
+  const results = { sent: 0, errors: 0 }
 
   try {
     // Get all team leads with Telegram
@@ -143,24 +144,24 @@ async function sendPMBriefs() {
       WHERE role = 'team_lead'
         AND active = true
         AND telegram_id IS NOT NULL
-    `;
+    `
 
     if (!teamLeads || teamLeads.length === 0) {
-      console.log('[CRON] PM Briefs: no team leads with Telegram found');
-      return results;
+      console.log('[CRON] PM Briefs: no team leads with Telegram found')
+      return results
     }
 
     for (const lead of teamLeads) {
       try {
-        const team = lead.team;
-        if (!team) continue;
+        const team = lead.team
+        if (!team) continue
 
         // Get team member IDs
         const members = await sql`
           SELECT id FROM users WHERE team = ${team} AND active = true
-        `;
-        const memberIds = members ? members.map((m) => m.id) : [];
-        if (memberIds.length === 0) continue;
+        `
+        const memberIds = members ? members.map((m) => m.id) : []
+        if (memberIds.length === 0) continue
 
         // Gather team metrics
         const [overdueRows, missingLogRows, blockedRows] = await Promise.all([
@@ -202,68 +203,68 @@ async function sendPMBriefs() {
             WHERE assigned_to_id = ANY(${memberIds})
               AND status = 'Blocked'
           `,
-        ]);
+        ])
 
-        const overdue = (overdueRows && overdueRows[0]) || { count: 0, list: null };
-        const missingNames = (missingLogRows && missingLogRows[0] && missingLogRows[0].names) || [];
-        const blocked = (blockedRows && blockedRows[0]) || { count: 0, list: null };
+        const overdue = overdueRows?.[0] || { count: 0, list: null }
+        const missingNames = missingLogRows?.[0]?.names || []
+        const blocked = blockedRows?.[0] || { count: 0, list: null }
 
-        const overdueList = (overdue.list || []).slice(0, 5);
-        const blockedList = (blocked.list || []).slice(0, 5);
+        const overdueList = (overdue.list || []).slice(0, 5)
+        const blockedList = (blocked.list || []).slice(0, 5)
 
         const today = new Date().toLocaleDateString('en-US', {
           weekday: 'short',
           month: 'short',
           day: 'numeric',
-        });
+        })
 
-        let message = `*\ud83d\udccb ${team} Team Brief — ${today}*\n\n`;
+        let message = `*\ud83d\udccb ${team} Team Brief — ${today}*\n\n`
 
         // Overdue section
         if (overdue.count > 0) {
-          message += `\ud83d\udd34 *${overdue.count} Overdue Ticket${overdue.count > 1 ? 's' : ''}:*\n`;
+          message += `\ud83d\udd34 *${overdue.count} Overdue Ticket${overdue.count > 1 ? 's' : ''}:*\n`
           for (const item of overdueList) {
-            message += `  \u2022 ${item}\n`;
+            message += `  \u2022 ${item}\n`
           }
           if (overdue.count > 5) {
-            message += `  _...and ${overdue.count - 5} more_\n`;
+            message += `  _...and ${overdue.count - 5} more_\n`
           }
-          message += '\n';
+          message += '\n'
         } else {
-          message += '\u2705 *No overdue tickets*\n\n';
+          message += '\u2705 *No overdue tickets*\n\n'
         }
 
         // Blocked section
         if (blocked.count > 0) {
-          message += `\ud83d\udeab *${blocked.count} Blocked Ticket${blocked.count > 1 ? 's' : ''}:*\n`;
+          message += `\ud83d\udeab *${blocked.count} Blocked Ticket${blocked.count > 1 ? 's' : ''}:*\n`
           for (const item of blockedList) {
-            message += `  \u2022 ${item}\n`;
+            message += `  \u2022 ${item}\n`
           }
-          message += '\n';
+          message += '\n'
         }
 
         // Missing time logs
         if (missingNames.length > 0) {
-          message += `\ud83d\udfe1 *Missing Time Log Today:*\n  ${missingNames.join(', ')}\n\n`;
+          message += `\ud83d\udfe1 *Missing Time Log Today:*\n  ${missingNames.join(', ')}\n\n`
         }
 
-        message += '_Reply with any question for more details._';
+        message += '_Reply with any question for more details._'
 
-        await bot.telegram.sendMessage(lead.telegram_id, message, { parse_mode: 'Markdown' });
-        results.sent++;
+        await bot.telegram.sendMessage(lead.telegram_id, message, { parse_mode: 'Markdown' })
+        results.sent++
       } catch (leadErr) {
-        console.error(`[CRON] PM Brief: failed for ${lead.display_name}:`, leadErr.message);
-        results.errors++;
+        console.error(`[CRON] PM Brief: failed for ${lead.display_name}:`, leadErr.message)
+        results.errors++
       }
     }
 
-    console.log('[CRON] PM Briefs completed:', JSON.stringify(results));
+    console.log('[CRON] PM Briefs completed:', JSON.stringify(results))
   } catch (err) {
-    console.error('[CRON] PM Briefs failed:', err.message);
-    results.errors++;
+    console.error('[CRON] PM Briefs failed:', err.message)
+    results.errors++
   }
 
-  return results;
+  return results
 }
 
-module.exports = { sendCEOBrief, sendPMBriefs };
+module.exports = { sendCEOBrief, sendPMBriefs }

@@ -86,6 +86,10 @@ helper reads `TELEGRAM_BOT_TOKEN` from env and handles the missing-token case.
 - Before merging any branch that touches shared `lib/` modules, run
   `npm run test:unit`. If a file you changed has no unit test yet and is pure
   logic (no network, no DB), consider adding one.
+- **CJS mocking caveat**: `vi.mock()` does NOT intercept CJS modules that
+  were already `require()`-d at import time with env-dependent init
+  (e.g., `lib/db.js`, `lib/redis.js`). Tests for these modules need a
+  vitest setup file to set env vars before module load.
 
 ## Intimation Relay (Phase 1 — shipped Apr 2026)
 Cross-user Telegram relay so managers/TLs can nudge a developer about a
@@ -146,3 +150,10 @@ Each future phase gets its own spec + plan under `docs/superpowers/`.
   possible.
 - Don't use `require('vitest')` in test files — it throws. Use ESM `import`
   and include the `.js` extension on relative paths.
+- Don't expose `err.message` in API responses — use `send500()` from
+  `lib/api-error.js` which logs internally and returns a generic error.
+- Don't use `req.query.secret` for cron auth — use `CRON_SECRET` header
+  only. Query-string secrets leak in server logs.
+- Don't add DB column references without checking migration files — column
+  names can drift when migrations rename them (e.g., `redmine_project_id`
+  vs `redmine_id`).

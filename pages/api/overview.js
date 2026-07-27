@@ -1,19 +1,24 @@
-import { getDb } from '../../lib/db';
-const { getCurrentUser } = require('../../lib/auth');
+import { getDb } from '../../lib/db'
 
-const EXPECTED_TIME_TEAMS = ['AI','DB','DevOps','JS/UI','Java','QA'];
-const APPROVED_REDMINE_IDS = [2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76];
+const { getCurrentUser } = require('../../lib/auth')
+const { send500 } = require('../../lib/api-error')
+
+const EXPECTED_TIME_TEAMS = ['AI', 'DB', 'DevOps', 'JS/UI', 'Java', 'QA']
+const APPROVED_REDMINE_IDS = [
+  2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
+  61, 62, 63, 65, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
+]
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'GET') return res.status(405).end()
 
   try {
-    const user = await getCurrentUser(req);
-    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    const user = await getCurrentUser(req)
+    if (!user) return res.status(401).json({ error: 'Not authenticated' })
 
-    const sql = getDb();
-    const isTeamLead = user.role === 'team_lead';
-    const team = user.team;
+    const sql = getDb()
+    const isTeamLead = user.role === 'team_lead'
+    const team = user.team
 
     const [kpis, projects, workload, alerts] = await Promise.all([
       // KPIs — scoped by team for team_leads
@@ -146,7 +151,7 @@ export default async function handler(req, res) {
             ORDER BY i.due_date ASC
             LIMIT 5
           `,
-    ]);
+    ])
 
     // Per-member hours today for workload drilldown
     const memberHours = isTeamLead
@@ -165,7 +170,7 @@ export default async function handler(req, res) {
           FROM users u
           WHERE u.active = true AND u.team IS NOT NULL
           ORDER BY u.team, u.name
-        `;
+        `
 
     res.status(200).json({
       kpis: kpis[0] || {},
@@ -173,9 +178,9 @@ export default async function handler(req, res) {
       workload,
       alerts,
       memberHours,
-    });
+    })
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error(err)
+    send500(res, err, 'overview')
   }
 }

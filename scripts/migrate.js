@@ -5,108 +5,127 @@
  * Usage:  node scripts/migrate.js
  */
 
-import { config } from 'dotenv';
-config({ path: '.env.local' });
+import { config } from 'dotenv'
 
-import { neon } from '@neondatabase/serverless';
-import { readFileSync, readdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+config({ path: '.env.local' })
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, 'migrations');
+import { readdirSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { neon } from '@neondatabase/serverless'
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const migrationsDir = join(__dirname, 'migrations')
+
+const DATABASE_URL = process.env.DATABASE_URL
 if (!DATABASE_URL) {
-  console.error('ERROR: DATABASE_URL not found in .env.local');
-  process.exit(1);
+  console.error('ERROR: DATABASE_URL not found in .env.local')
+  process.exit(1)
 }
 
-const sql = neon(DATABASE_URL);
+const sql = neon(DATABASE_URL)
 
 /**
  * Split SQL into individual statements, respecting $$ blocks and DO blocks.
  */
 function splitStatements(content) {
-  const statements = [];
-  let current = '';
-  let inDollarBlock = false;
+  const statements = []
+  let current = ''
+  let inDollarBlock = false
 
-  const lines = content.split('\n');
+  const lines = content.split('\n')
   for (const line of lines) {
-    const trimmed = line.trim();
+    const trimmed = line.trim()
     // Skip comment-only lines at top level
-    if (!inDollarBlock && trimmed.startsWith('--') && current.trim() === '') continue;
+    if (!inDollarBlock && trimmed.startsWith('--') && current.trim() === '') continue
 
     // Track $$ blocks (function bodies, DO blocks)
-    const dollarMatches = (line.match(/\$\$/g) || []).length;
+    const dollarMatches = (line.match(/\$\$/g) || []).length
     if (dollarMatches % 2 !== 0) {
-      inDollarBlock = !inDollarBlock;
+      inDollarBlock = !inDollarBlock
     }
 
-    current += line + '\n';
+    current += `${line}\n`
 
     // If we're not inside a $$ block and line ends with ;, split here
     if (!inDollarBlock && trimmed.endsWith(';')) {
-      const stmt = current.trim();
-      if (stmt && stmt !== ';') statements.push(stmt);
-      current = '';
+      const stmt = current.trim()
+      if (stmt && stmt !== ';') statements.push(stmt)
+      current = ''
     }
   }
 
   // Catch any trailing statement without ;
-  if (current.trim()) statements.push(current.trim());
-  return statements;
+  if (current.trim()) statements.push(current.trim())
+  return statements
 }
 
 async function runMigrations() {
-  console.log('=== Company OS — Database Migrations ===\n');
+  console.log('=== Company OS — Database Migrations ===\n')
+
+  // Ensure tracking table exists (idempotent)
+  await sql`CREATE TABLE IF NOT EXISTS _schema_migrations (
+    filename TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ DEFAULT NOW()
+  )`
 
   // Read all .sql files sorted alphabetically (001, 002, ...)
   const files = readdirSync(migrationsDir)
-    .filter(f => f.endsWith('.sql'))
-    .sort();
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
 
   if (files.length === 0) {
-    console.log('No migration files found.');
-    return;
+    console.log('No migration files found.')
+    return
   }
 
-  console.log(`Found ${files.length} migration(s) to run.\n`);
+  console.log(`Found ${files.length} migration(s) to run.\n`)
 
-  let passed = 0;
-  let failed = 0;
+  let passed = 0
+  let failed = 0
+  let skipped = 0
 
   for (const file of files) {
-    const filePath = join(migrationsDir, file);
-    const sqlContent = readFileSync(filePath, 'utf-8');
+    // Skip already-applied migrations
+    const alreadyApplied = await sql`SELECT 1 FROM _schema_migrations WHERE filename = ${file}`
+    if (alreadyApplied.length > 0) {
+      console.log(`Skipping ${file} (already applied)`)
+      skipped++
+      continue
+    }
 
-    process.stdout.write(`Running migration ${file}... `);
+    const filePath = join(migrationsDir, file)
+    const sqlContent = readFileSync(filePath, 'utf-8')
+
+    process.stdout.write(`Running migration ${file}... `)
 
     try {
       // Neon serverless driver doesn't support multiple statements in one call.
       // Split by semicolons, but respect $$ blocks (PL/pgSQL function bodies).
-      const statements = splitStatements(sqlContent);
+      const statements = splitStatements(sqlContent)
       for (const stmt of statements) {
-        if (stmt.trim()) await sql(stmt);
+        if (stmt.trim()) await sql(stmt)
       }
-      console.log('done');
-      passed++;
+
+      // Record successful migration
+      await sql`INSERT INTO _schema_migrations (filename) VALUES (${file})`
+      console.log('done')
+      passed++
     } catch (err) {
-      console.log('FAILED');
-      console.error(`  Error: ${err.message}\n`);
-      failed++;
+      console.log('FAILED')
+      console.error(`  Error: ${err.message}\n`)
+      failed++
     }
   }
 
-  console.log(`\n=== Migrations complete: ${passed} passed, ${failed} failed ===`);
+  console.log(`\n=== Migrations complete: ${passed} passed, ${skipped} skipped, ${failed} failed ===`)
 
   if (failed > 0) {
-    process.exit(1);
+    process.exit(1)
   }
 }
 
-runMigrations().catch(err => {
-  console.error('Fatal error running migrations:', err);
-  process.exit(1);
-});
+runMigrations().catch((err) => {
+  console.error('Fatal error running migrations:', err)
+  process.exit(1)
+})

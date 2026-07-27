@@ -1,16 +1,17 @@
-const { getCurrentUser } = require('../../lib/auth');
-const { getDb } = require('../../lib/db');
+const { getCurrentUser } = require('../../lib/auth')
+const { getDb } = require('../../lib/db')
+const { send500 } = require('../../lib/api-error')
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'GET') return res.status(405).end()
 
   try {
-    const user = await getCurrentUser(req);
-    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    const user = await getCurrentUser(req)
+    if (!user) return res.status(401).json({ error: 'Not authenticated' })
 
-    const sql = getDb();
-    const isTeamLead = user.role === 'team_lead';
-    const team = user.team;
+    const sql = getDb()
+    const isTeamLead = user.role === 'team_lead'
+    const team = user.team
 
     const escalations = isTeamLead
       ? await sql`
@@ -47,11 +48,11 @@ export default async function handler(req, res) {
           LEFT JOIN dashboard_users du2 ON du2.id = el.escalated_to
           ORDER BY el.triggered_at DESC
           LIMIT 20
-        `;
+        `
 
-    res.status(200).json({ escalations });
+    res.status(200).json({ escalations })
   } catch (err) {
-    console.error('Escalations error:', err);
-    res.status(500).json({ error: err.message });
+    console.error('Escalations error:', err)
+    send500(res, err, 'escalations')
   }
 }

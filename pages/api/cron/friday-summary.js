@@ -4,26 +4,29 @@
  * Cron: 13:30 UTC Friday = 7:00 PM IST
  */
 
-import { getDb } from '../../../lib/db';
-import { sendTelegramMessage } from '../../../lib/telegram';
+import { getDb } from '../../../lib/db'
+import { sendTelegramMessage } from '../../../lib/telegram'
 
-const APPROVED_REDMINE_IDS = [2,3,5,7,14,15,16,17,18,19,20,21,23,29,34,43,44,47,49,50,51,55,56,57,60,61,62,63,65,67,68,69,70,71,72,73,74,75,76];
+const APPROVED_REDMINE_IDS = [
+  2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
+  61, 62, 63, 65, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
+]
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end()
 
-  const secret = req.headers['x-cron-secret'] || req.query.secret;
-  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  const secret = req.headers['x-cron-secret']
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' })
 
-  const sql = getDb();
-  const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  const sql = getDb()
+  const _TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 
   try {
     const managers = await sql`
       SELECT id, display_name, telegram_id
       FROM dashboard_users
       WHERE active = true AND role = 'manager' AND telegram_id IS NOT NULL
-    `;
+    `
 
     const [velocity, compliance, overdue, topProjects] = await Promise.all([
       sql`SELECT COUNT(*) AS count FROM issues WHERE status IN ('Closed','Resolved') AND updated_at >= NOW() - INTERVAL '7 days' AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
@@ -37,15 +40,17 @@ export default async function handler(req, res) {
           (SELECT COUNT(*) FROM issues WHERE project_id = p.id AND status NOT IN ('Closed','Resolved','Verified','Rejected')) AS open_tickets
         FROM projects p WHERE p.status = 'active' AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]) ORDER BY open_tickets DESC LIMIT 5
       `,
-    ]);
+    ])
 
-    const closed = parseInt(velocity[0]?.count || 0);
-    const pct = parseInt(compliance[0]?.pct || 0);
-    const overdueCount = parseInt(overdue[0]?.count || 0);
+    const closed = parseInt(velocity[0]?.count || 0, 10)
+    const pct = parseInt(compliance[0]?.pct || 0, 10)
+    const overdueCount = parseInt(overdue[0]?.count || 0, 10)
 
     const dateStr = new Date().toLocaleDateString('en-IN', {
-      timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long',
-    });
+      timeZone: 'Asia/Kolkata',
+      day: 'numeric',
+      month: 'long',
+    })
 
     const lines = [
       `📊 *Weekly Summary — ${dateStr}*\n`,
@@ -53,25 +58,24 @@ export default async function handler(req, res) {
       `⏰ Time log compliance: *${pct}%*`,
       `🔴 Currently overdue: *${overdueCount}*\n`,
       `*Top Projects by Open Tickets:*`,
-      ...topProjects.map(p => `  • ${p.name}: *${p.open_tickets}* open`),
+      ...topProjects.map((p) => `  • ${p.name}: *${p.open_tickets}* open`),
       `\nHave a great weekend! 🎉`,
-    ];
+    ]
 
-    const msg = lines.join('\n');
-    let sent = 0;
+    const msg = lines.join('\n')
+    let sent = 0
     for (const m of managers) {
       try {
-        await sendTelegramMessage(m.telegram_id, msg);
-        sent++;
+        await sendTelegramMessage(m.telegram_id, msg)
+        sent++
       } catch (e) {
-        console.error(`Friday summary failed for ${m.display_name}:`, e.message);
+        console.error(`Friday summary failed for ${m.display_name}:`, e.message)
       }
     }
 
-    return res.status(200).json({ ok: true, sent });
+    return res.status(200).json({ ok: true, sent })
   } catch (err) {
-    console.error('Friday summary error:', err);
-    return res.status(500).json({ error: err.message });
+    console.error('Friday summary error:', err)
+    return res.status(500).json({ error: 'Internal server error' })
   }
 }
-

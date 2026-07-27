@@ -4,17 +4,17 @@
  * Cron: every 15 minutes
  */
 
-import { getDb } from '../../../lib/db';
-import { sendTelegramMessage } from '../../../lib/telegram';
+import { getDb } from '../../../lib/db'
+import { sendTelegramMessage } from '../../../lib/telegram'
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end()
 
-  const secret = req.headers['x-cron-secret'] || req.query.secret;
-  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  const secret = req.headers['x-cron-secret']
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' })
 
-  const sql = getDb();
-  const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  const sql = getDb()
+  const _TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 
   try {
     const due = await sql`
@@ -23,23 +23,22 @@ export default async function handler(req, res) {
       WHERE sent = false AND remind_at <= NOW()
       ORDER BY remind_at ASC
       LIMIT 50
-    `;
+    `
 
-    let sent = 0;
+    let sent = 0
     for (const reminder of due) {
       try {
-        await sendTelegramMessage(reminder.telegram_id, `⏰ *Reminder*\n\n${reminder.message}`);
-        await sql`UPDATE user_reminders SET sent = true WHERE id = ${reminder.id}`;
-        sent++;
+        await sendTelegramMessage(reminder.telegram_id, `⏰ *Reminder*\n\n${reminder.message}`)
+        await sql`UPDATE user_reminders SET sent = true WHERE id = ${reminder.id}`
+        sent++
       } catch (e) {
-        console.error(`Reminder ${reminder.id} failed:`, e.message);
+        console.error(`Reminder ${reminder.id} failed:`, e.message)
       }
     }
 
-    return res.status(200).json({ ok: true, sent, total: due.length });
+    return res.status(200).json({ ok: true, sent, total: due.length })
   } catch (err) {
-    console.error('Reminder delivery error:', err);
-    return res.status(500).json({ error: err.message });
+    console.error('Reminder delivery error:', err)
+    return res.status(500).json({ error: 'Internal server error' })
   }
 }
-

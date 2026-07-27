@@ -5,8 +5,8 @@
  * saves to escalation_log, and optionally notifies the PM/manager.
  */
 
-const { getDb } = require('../../lib/db');
-const { resolveSlackUser } = require('./index');
+const { getDb } = require('../../lib/db')
+const { resolveSlackUser } = require('./index')
 
 /**
  * Handle the "Report a Blocker" button click.
@@ -16,18 +16,18 @@ const { resolveSlackUser } = require('./index');
  * @param {object} client - Slack WebClient
  */
 async function handleBlockerButton(body, client) {
-  const sql = getDb();
-  const slackUserId = body.user?.id;
-  const triggerId = body.trigger_id;
+  const sql = getDb()
+  const slackUserId = body.user?.id
+  const triggerId = body.trigger_id
 
   if (!triggerId) {
-    console.warn('blockers: No trigger_id in button payload');
-    return;
+    console.warn('blockers: No trigger_id in button payload')
+    return
   }
 
   // Resolve user
-  const resolved = await resolveSlackUser(slackUserId);
-  if (!resolved || !resolved.redmineUserId) return;
+  const resolved = await resolveSlackUser(slackUserId)
+  if (!resolved?.redmineUserId) return
 
   // Fetch this dev's active tickets for the dropdown
   const tickets = await sql`
@@ -37,25 +37,25 @@ async function handleBlockerButton(body, client) {
       AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
     ORDER BY i.due_date ASC NULLS LAST
     LIMIT 25
-  `;
+  `
 
   // Build ticket options for the modal dropdown
-  const ticketOptions = tickets.map(t => {
-    const label = t.redmine_id ? `TK-${t.redmine_id}` : `#${t.id}`;
+  const ticketOptions = tickets.map((t) => {
+    const label = t.redmine_id ? `TK-${t.redmine_id}` : `#${t.id}`
     // Slack plain_text has a 75 char limit for option text
-    const titleTrunc = t.title.length > 55 ? t.title.substring(0, 52) + '...' : t.title;
+    const titleTrunc = t.title.length > 55 ? `${t.title.substring(0, 52)}...` : t.title
     return {
       text: { type: 'plain_text', text: `${label} — ${titleTrunc}` },
       value: String(t.id),
-    };
-  });
+    }
+  })
 
   // If no tickets, add a placeholder
   if (ticketOptions.length === 0) {
     ticketOptions.push({
       text: { type: 'plain_text', text: 'No active tickets found' },
       value: '0',
-    });
+    })
   }
 
   // Open the blocker modal
@@ -114,13 +114,16 @@ async function handleBlockerButton(body, client) {
               { text: { type: 'plain_text', text: 'Low — Can work around it' }, value: 'low' },
               { text: { type: 'plain_text', text: 'Medium — Slowing me down' }, value: 'medium' },
               { text: { type: 'plain_text', text: 'High — Completely blocked' }, value: 'high' },
-              { text: { type: 'plain_text', text: 'Critical — Urgent, needs escalation now' }, value: 'critical' },
+              {
+                text: { type: 'plain_text', text: 'Critical — Urgent, needs escalation now' },
+                value: 'critical',
+              },
             ],
           },
         },
       ],
     },
-  });
+  })
 }
 
 /**
@@ -132,29 +135,26 @@ async function handleBlockerButton(body, client) {
  * @param {object} client - Slack WebClient
  */
 async function handleBlockerSubmission(body, view, client) {
-  const sql = getDb();
+  const sql = getDb()
 
   // Extract private metadata
-  let metadata = {};
+  let metadata = {}
   try {
-    metadata = JSON.parse(view.private_metadata || '{}');
+    metadata = JSON.parse(view.private_metadata || '{}')
   } catch (_) {}
 
-  const slackUserId = metadata.slackUserId || body.user?.id;
-  const dashboardUserId = metadata.dashboardUserId;
+  const slackUserId = metadata.slackUserId || body.user?.id
+  const dashboardUserId = metadata.dashboardUserId
 
   // Extract form values
-  const values = view.state?.values || {};
-  const ticketId = parseInt(
-    values.ticket_block?.blocked_ticket?.selected_option?.value || '0',
-    10
-  );
-  const description = values.description_block?.blocker_description?.value || '';
-  const severity = values.severity_block?.blocker_severity?.selected_option?.value || 'medium';
+  const values = view.state?.values || {}
+  const ticketId = parseInt(values.ticket_block?.blocked_ticket?.selected_option?.value || '0', 10)
+  const description = values.description_block?.blocker_description?.value || ''
+  const severity = values.severity_block?.blocker_severity?.selected_option?.value || 'medium'
 
   if (!ticketId || ticketId === 0) {
-    console.warn('blockers: No valid ticket selected in blocker form');
-    return;
+    console.warn('blockers: No valid ticket selected in blocker form')
+    return
   }
 
   // Fetch ticket details
@@ -164,13 +164,13 @@ async function handleBlockerSubmission(body, view, client) {
     LEFT JOIN users u ON u.id = i.assigned_to_id
     WHERE i.id = ${ticketId}
     LIMIT 1
-  `;
+  `
 
-  const ticket = tickets[0] || {};
-  const ticketLabel = ticket.redmine_id ? `TK-${ticket.redmine_id}` : `#${ticketId}`;
+  const ticket = tickets[0] || {}
+  const ticketLabel = ticket.redmine_id ? `TK-${ticket.redmine_id}` : `#${ticketId}`
 
   // Find the escalation target (team lead for this team, or any manager)
-  let escalatedTo = null;
+  let escalatedTo = null
   if (ticket.team) {
     const leadRows = await sql`
       SELECT id FROM dashboard_users
@@ -178,9 +178,9 @@ async function handleBlockerSubmission(body, view, client) {
         AND role = 'team_lead'
         AND active = true
       LIMIT 1
-    `;
+    `
     if (leadRows.length > 0) {
-      escalatedTo = leadRows[0].id;
+      escalatedTo = leadRows[0].id
     }
   }
 
@@ -191,9 +191,9 @@ async function handleBlockerSubmission(body, view, client) {
       WHERE role = 'manager'
         AND active = true
       LIMIT 1
-    `;
+    `
     if (managerRows.length > 0) {
-      escalatedTo = managerRows[0].id;
+      escalatedTo = managerRows[0].id
     }
   }
 
@@ -206,7 +206,7 @@ async function handleBlockerSubmission(body, view, client) {
     severity,
     reported_via: 'slack_blocker_modal',
     slack_user_id: slackUserId,
-  };
+  }
 
   // Insert into escalation_log
   await sql`
@@ -223,7 +223,7 @@ async function handleBlockerSubmission(body, view, client) {
       false,
       NOW()
     )
-  `;
+  `
 
   // Update the ticket status to Blocked in Neon
   await sql`
@@ -231,7 +231,7 @@ async function handleBlockerSubmission(body, view, client) {
     SET status = 'Blocked', updated_at = NOW()
     WHERE id = ${ticketId}
       AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
-  `;
+  `
 
   // Log in slack_ticket_updates
   await sql`
@@ -249,7 +249,7 @@ async function handleBlockerSubmission(body, view, client) {
       'blocker_report',
       NOW()
     )
-  `;
+  `
 
   // ── Notify the manager/team lead ──
 
@@ -260,17 +260,17 @@ async function handleBlockerSubmission(body, view, client) {
       FROM dashboard_users
       WHERE id = ${escalatedTo}
       LIMIT 1
-    `;
+    `
 
-    const target = targetUsers[0];
+    const target = targetUsers[0]
 
     if (target?.slack_id) {
       // Notify via Slack DM
-      const resolved = await resolveSlackUser(slackUserId);
-      const reporterName = resolved?.displayName || 'A developer';
+      const resolved = await resolveSlackUser(slackUserId)
+      const reporterName = resolved?.displayName || 'A developer'
 
       try {
-        const { sendDirectMessage } = require('./index');
+        const { sendDirectMessage } = require('./index')
         await sendDirectMessage(target.slack_id, `Blocker reported by ${reporterName}`, [
           {
             type: 'header',
@@ -290,9 +290,9 @@ async function handleBlockerSubmission(body, view, client) {
               { type: 'mrkdwn', text: `_Reported via Slack at ${new Date().toLocaleString()}_` },
             ],
           },
-        ]);
+        ])
       } catch (err) {
-        console.error('blockers: Failed to notify manager via Slack:', err.message);
+        console.error('blockers: Failed to notify manager via Slack:', err.message)
       }
     }
 
@@ -300,7 +300,9 @@ async function handleBlockerSubmission(body, view, client) {
     // This is handled by the existing Telegram bot infrastructure if needed
     if (target?.telegram_id && !target?.slack_id) {
       // Log for future Telegram notification hook
-      console.log(`blockers: Manager ${target.display_name} (telegram_id: ${target.telegram_id}) should be notified via Telegram about blocker on ${ticketLabel}`);
+      console.log(
+        `blockers: Manager ${target.display_name} (telegram_id: ${target.telegram_id}) should be notified via Telegram about blocker on ${ticketLabel}`,
+      )
     }
   }
 
@@ -329,12 +331,14 @@ async function handleBlockerSubmission(body, view, client) {
           ],
         },
       ],
-    });
+    })
   } catch (err) {
-    console.warn('blockers: Failed to send confirmation to developer:', err.message);
+    console.warn('blockers: Failed to send confirmation to developer:', err.message)
   }
 
-  console.log(`blockers: Blocker reported on ${ticketLabel} by Slack user ${slackUserId}, severity: ${severity}`);
+  console.log(
+    `blockers: Blocker reported on ${ticketLabel} by Slack user ${slackUserId}, severity: ${severity}`,
+  )
 }
 
-module.exports = { handleBlockerButton, handleBlockerSubmission };
+module.exports = { handleBlockerButton, handleBlockerSubmission }

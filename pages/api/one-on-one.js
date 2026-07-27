@@ -1,28 +1,28 @@
-const { getCurrentUser } = require('../../lib/auth');
-const { getDb } = require('../../lib/db');
-const { chat } = require('../../lib/ai');
+const { getCurrentUser } = require('../../lib/auth')
+const { getDb } = require('../../lib/db')
+const { chat } = require('../../lib/ai')
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+  if (req.method !== 'POST') return res.status(405).end()
 
   try {
-    const user = await getCurrentUser(req);
-    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    const user = await getCurrentUser(req)
+    if (!user) return res.status(401).json({ error: 'Not authenticated' })
 
-    const { personId } = req.body;
-    if (!personId) return res.status(400).json({ error: 'personId is required' });
+    const { personId } = req.body
+    if (!personId) return res.status(400).json({ error: 'personId is required' })
 
-    const sql = getDb();
+    const sql = getDb()
 
     // Fetch person's data
     const personRows = await sql`
       SELECT id, name, team, role, initials
       FROM users WHERE id = ${personId} AND active = true LIMIT 1
-    `;
+    `
     if (personRows.length === 0) {
-      return res.status(404).json({ error: 'Person not found' });
+      return res.status(404).json({ error: 'Person not found' })
     }
-    const person = personRows[0];
+    const person = personRows[0]
 
     // Fetch recent tickets, hours, blockers, overdue items
     const [tickets, hours, overdue, recentActivity] = await Promise.all([
@@ -57,30 +57,34 @@ export default async function handler(req, res) {
         ORDER BY ij.created_at DESC
         LIMIT 5
       `,
-    ]);
+    ])
 
-    const blockedTickets = tickets.filter(t => t.status === 'Blocked');
-    const hoursData = hours[0] || { hours_this_week: 0, hours_this_month: 0 };
-    const overdueCount = parseInt(overdue[0]?.count || 0);
+    const blockedTickets = tickets.filter((t) => t.status === 'Blocked')
+    const hoursData = hours[0] || { hours_this_week: 0, hours_this_month: 0 }
+    const overdueCount = parseInt(overdue[0]?.count || 0, 10)
 
     // Build data summary
     const dataSummary = `
 Team: ${person.team}
 Role: ${person.role}
 Open tickets: ${tickets.length}
-Blocked tickets: ${blockedTickets.length} ${blockedTickets.length > 0 ? '(' + blockedTickets.map(t => t.title).join(', ') + ')' : ''}
+Blocked tickets: ${blockedTickets.length} ${blockedTickets.length > 0 ? `(${blockedTickets.map((t) => t.title).join(', ')})` : ''}
 Overdue items: ${overdueCount}
 Hours this week: ${hoursData.hours_this_week}h
 Hours this month: ${hoursData.hours_this_month}h
-Recent ticket titles: ${tickets.slice(0, 5).map(t => `${t.title} [${t.status}]`).join('; ')}
-Recent activity: ${recentActivity.map(a => a.notes?.substring(0, 80)).join('; ') || 'No recent journal entries'}
-`.trim();
+Recent ticket titles: ${tickets
+      .slice(0, 5)
+      .map((t) => `${t.title} [${t.status}]`)
+      .join('; ')}
+Recent activity: ${recentActivity.map((a) => a.notes?.substring(0, 80)).join('; ') || 'No recent journal entries'}
+`.trim()
 
     // Call AI for talking points
     const aiMessages = [
       {
         role: 'system',
-        content: 'You are a helpful management assistant. Generate concise, actionable 1-on-1 meeting talking points. Use bullet points. Be specific based on the data provided.',
+        content:
+          'You are a helpful management assistant. Generate concise, actionable 1-on-1 meeting talking points. Use bullet points. Be specific based on the data provided.',
       },
       {
         role: 'user',
@@ -97,10 +101,11 @@ Include sections for:
 
 Keep it concise with bullet points. Focus on the most important items.`,
       },
-    ];
+    ]
 
-    const response = await chat(aiMessages);
-    const talkingPoints = response.choices[0]?.message?.content || 'Unable to generate talking points at this time.';
+    const response = await chat(aiMessages)
+    const talkingPoints =
+      response.choices[0]?.message?.content || 'Unable to generate talking points at this time.'
 
     res.status(200).json({
       person: { id: person.id, name: person.name, team: person.team, role: person.role },
@@ -112,9 +117,9 @@ Keep it concise with bullet points. Focus on the most important items.`,
         hours_this_week: hoursData.hours_this_week,
         hours_this_month: hoursData.hours_this_month,
       },
-    });
+    })
   } catch (err) {
-    console.error('One-on-one API error:', err);
-    res.status(500).json({ error: 'Failed to generate talking points' });
+    console.error('One-on-one API error:', err)
+    res.status(500).json({ error: 'Failed to generate talking points' })
   }
 }

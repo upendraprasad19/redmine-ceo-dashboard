@@ -1,12 +1,13 @@
-import { getDb } from '../../../lib/db';
-import { requireAdmin } from '../../../lib/admin';
+import { requireAdmin } from '../../../lib/admin'
+import { getDb } from '../../../lib/db'
+import { send500 } from '../../../lib/api-error'
 
 export default async function handler(req, res) {
-  const sql = getDb();
+  const sql = getDb()
 
   try {
-    const user = await requireAdmin(req, res);
-    if (!user) return;
+    const user = await requireAdmin(req, res)
+    if (!user) return
 
     if (req.method === 'GET') {
       const records = await sql`
@@ -15,29 +16,29 @@ export default async function handler(req, res) {
         JOIN users u ON lr.user_id = u.id
         WHERE lr.end_date >= CURRENT_DATE
         ORDER BY lr.start_date DESC
-      `;
-      return res.status(200).json({ records });
+      `
+      return res.status(200).json({ records })
     }
 
     if (req.method === 'POST') {
-      const { user_id, leave_type, start_date, end_date, notes } = req.body;
+      const { user_id, leave_type, start_date, end_date, notes } = req.body
       const result = await sql`
         INSERT INTO leave_records (user_id, leave_type, start_date, end_date, notes, source)
         VALUES (${user_id}, ${leave_type || 'Other'}, ${start_date}, ${end_date}, ${notes || null}, 'manual')
         RETURNING id
-      `;
-      return res.status(200).json({ id: result[0].id });
+      `
+      return res.status(200).json({ id: result[0].id })
     }
 
     if (req.method === 'DELETE') {
-      const { id } = req.query;
-      await sql`DELETE FROM leave_records WHERE id = ${id} AND source = 'manual'`;
-      return res.status(200).json({ success: true });
+      const { id } = req.query
+      await sql`DELETE FROM leave_records WHERE id = ${id} AND source = 'manual'`
+      return res.status(200).json({ success: true })
     }
 
-    res.status(405).end();
+    res.status(405).end()
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error(err)
+    send500(res, err, 'leave')
   }
 }

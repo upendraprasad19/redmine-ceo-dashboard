@@ -1,16 +1,18 @@
-import { getDb } from '../../../lib/db';
-const { getCurrentUser } = require('../../../lib/auth');
+import { getDb } from '../../../lib/db'
 
-const EXPECTED_TIME_TEAMS = ['AI','DB','DevOps','JS/UI','Java','QA'];
+const { getCurrentUser } = require('../../../lib/auth')
+const { send500 } = require('../../../lib/api-error')
+
+const EXPECTED_TIME_TEAMS = ['AI', 'DB', 'DevOps', 'JS/UI', 'Java', 'QA']
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'GET') return res.status(405).end()
 
   try {
-    const user = await getCurrentUser(req);
-    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    const user = await getCurrentUser(req)
+    if (!user) return res.status(401).json({ error: 'Not authenticated' })
 
-    const sql = getDb();
+    const sql = getDb()
 
     // Full profile record (identity + prefs + channels)
     const meRows = await sql`
@@ -18,9 +20,9 @@ export default async function handler(req, res) {
              briefing_time, briefing_days, morning_briefing, notification_channels,
              linked_redmine_user_id
       FROM dashboard_users WHERE id = ${user.id} LIMIT 1
-    `;
-    const me = meRows[0] || null;
-    if (!me) return res.status(404).json({ error: 'User not found' });
+    `
+    const me = meRows[0] || null
+    if (!me) return res.status(404).json({ error: 'User not found' })
 
     if (user.role === 'manager') {
       const [kpis, topRisk] = await Promise.all([
@@ -41,15 +43,15 @@ export default async function handler(req, res) {
             AND i.due_date IS NOT NULL AND i.due_date < CURRENT_DATE
           GROUP BY p.name ORDER BY overdue_count DESC LIMIT 3
         `,
-      ]);
+      ])
       return res.status(200).json({
         me,
         snapshot: { scope: 'manager', ...kpis[0], topRisk },
-      });
+      })
     }
 
     // team_lead
-    const team = user.team;
+    const team = user.team
     const [kpis, topDev] = await Promise.all([
       sql`
         SELECT
@@ -71,13 +73,13 @@ export default async function handler(req, res) {
           AND i.status NOT IN ('Closed','Resolved','Verified','Rejected')
         GROUP BY u.name ORDER BY open_count DESC LIMIT 3
       `,
-    ]);
+    ])
     return res.status(200).json({
       me,
       snapshot: { scope: 'team_lead', team, ...kpis[0], topDev },
-    });
+    })
   } catch (err) {
-    console.error('profile/snapshot error:', err);
-    res.status(500).json({ error: err.message });
+    console.error('profile/snapshot error:', err)
+    send500(res, err, 'profile-snapshot')
   }
 }

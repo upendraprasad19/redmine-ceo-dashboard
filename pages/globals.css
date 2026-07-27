@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap");
 
 * {
   box-sizing: border-box;
@@ -9,9 +9,9 @@
 body {
   margin: 0;
   padding: 0;
-  background: #030B15;
-  color: #F0F4FF;
-  font-family: 'Barlow', sans-serif;
+  background: #030b15;
+  color: #f0f4ff;
+  font-family: "Barlow", sans-serif;
 }
 
 ::-webkit-scrollbar {
@@ -19,30 +19,44 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 99px;
 }
 
-input[type=date]::-webkit-calendar-picker-indicator {
+input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.4);
 }
 
 @keyframes pulseRing {
-  0% { opacity: 1; }
-  50% { opacity: .3; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 input:-webkit-autofill {
-  -webkit-box-shadow: 0 0 0 100px #0A1628 inset !important;
-  -webkit-text-fill-color: #F0F4FF !important;
+  -webkit-box-shadow: 0 0 0 100px #0a1628 inset;
+  -webkit-text-fill-color: #f0f4ff;
 }

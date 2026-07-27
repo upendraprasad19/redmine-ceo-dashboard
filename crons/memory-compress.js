@@ -5,14 +5,14 @@
 
 async function runMemoryCompression() {
   try {
-    const { compressAllMemories } = require('../intelligence/memory');
-    const result = await compressAllMemories();
-    console.log(`[CRON] Memory compression: ${result.compressed} users compressed`);
-    return result;
+    const { compressAllMemories } = require('../intelligence/memory')
+    const result = await compressAllMemories()
+    console.log(`[CRON] Memory compression: ${result.compressed} users compressed`)
+    return result
   } catch (err) {
-    console.error('[CRON] Memory compression failed:', err.message);
-    return { compressed: 0, error: err.message };
+    console.error('[CRON] Memory compression failed:', err.message)
+    return { compressed: 0, error: err.message }
   }
 }
 
-module.exports = { runMemoryCompression };
+module.exports = { runMemoryCompression }

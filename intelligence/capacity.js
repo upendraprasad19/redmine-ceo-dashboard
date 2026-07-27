@@ -3,16 +3,16 @@
  * Workload tracking, capacity prediction, and availability alerts.
  */
 
-const { getDb } = require('../lib/db');
+const { getDb } = require('../lib/db')
 
-const MAX_TICKETS_PER_DEV = 10; // 10 active tickets = 100% workload
+const MAX_TICKETS_PER_DEV = 10 // 10 active tickets = 100% workload
 
 // ────────────────────────────────────────────────────────────────
 // updateCapacityStatus — Recalculate capacity for all active users
 // ────────────────────────────────────────────────────────────────
 async function updateCapacityStatus() {
-  const sql = getDb();
-  const results = [];
+  const sql = getDb()
+  const results = []
 
   try {
     // All active dashboard_users linked to Redmine
@@ -21,14 +21,14 @@ async function updateCapacityStatus() {
       FROM dashboard_users du
       WHERE du.active = true
         AND du.linked_redmine_user_id IS NOT NULL
-    `;
+    `
 
-    if (!dashUsers || dashUsers.length === 0) return results;
+    if (!dashUsers || dashUsers.length === 0) return results
 
     for (const user of dashUsers) {
       try {
-        const uid = user.linked_redmine_user_id;
-        const duid = user.dashboard_user_id;
+        const uid = user.linked_redmine_user_id
+        const duid = user.dashboard_user_id
 
         // 1. Count active tickets
         const ticketRows = await sql`
@@ -36,12 +36,12 @@ async function updateCapacityStatus() {
           FROM issues
           WHERE assigned_to_id = ${uid}
             AND status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
-        `;
-        const activeTickets = (ticketRows && ticketRows[0] && ticketRows[0].active_tickets) || 0;
+        `
+        const activeTickets = ticketRows?.[0]?.active_tickets || 0
 
         // 2. Workload percentage
-        const workloadPct = Math.min((activeTickets / MAX_TICKETS_PER_DEV) * 100, 100);
-        const availableCapacityPct = Math.max(100 - workloadPct, 0);
+        const workloadPct = Math.min((activeTickets / MAX_TICKETS_PER_DEV) * 100, 100)
+        const availableCapacityPct = Math.max(100 - workloadPct, 0)
 
         // 3. Predict free date based on avg close rate (tickets per day over last 30 days)
         const rateRows = await sql`
@@ -49,19 +49,19 @@ async function updateCapacityStatus() {
           FROM issues
           WHERE assigned_to_id = ${uid}
             AND closed_at >= NOW() - INTERVAL '30 days'
-        `;
-        const closed30d = (rateRows && rateRows[0] && rateRows[0].closed_30d) || 0;
-        const closeRatePerDay = closed30d / 30;
+        `
+        const closed30d = rateRows?.[0]?.closed_30d || 0
+        const closeRatePerDay = closed30d / 30
 
-        let predictedFreeDate = null;
-        let predictedFreePct = null;
+        let predictedFreeDate = null
+        let predictedFreePct = null
         if (closeRatePerDay > 0 && activeTickets > 0) {
-          const daysToFree = Math.ceil(activeTickets / closeRatePerDay);
-          const freeDate = new Date();
-          freeDate.setDate(freeDate.getDate() + daysToFree);
-          predictedFreeDate = freeDate.toISOString().slice(0, 10);
+          const daysToFree = Math.ceil(activeTickets / closeRatePerDay)
+          const freeDate = new Date()
+          freeDate.setDate(freeDate.getDate() + daysToFree)
+          predictedFreeDate = freeDate.toISOString().slice(0, 10)
           // Predicted capacity after current queue drains
-          predictedFreePct = 100;
+          predictedFreePct = 100
         }
 
         // 4. Calculate days_underloaded (consecutive days with < 30% workload)
@@ -70,12 +70,12 @@ async function updateCapacityStatus() {
           SELECT days_underloaded
           FROM capacity_status
           WHERE user_id = ${duid}
-        `;
-        let daysUnderloaded = 0;
-        if (existingRows && existingRows[0]) {
+        `
+        let daysUnderloaded = 0
+        if (existingRows?.[0]) {
           if (availableCapacityPct > 70) {
             // < 30% workload
-            daysUnderloaded = (existingRows[0].days_underloaded || 0) + 1;
+            daysUnderloaded = (existingRows[0].days_underloaded || 0) + 1
           }
           // else reset to 0
         }
@@ -101,7 +101,7 @@ async function updateCapacityStatus() {
             days_underloaded = EXCLUDED.days_underloaded,
             alert_sent_today = false,
             last_calculated = NOW()
-        `;
+        `
 
         // 6. Create availability_alert if underloaded for > 3 days
         if (availableCapacityPct > 50 && daysUnderloaded > 3) {
@@ -112,7 +112,7 @@ async function updateCapacityStatus() {
               AND created_at >= CURRENT_DATE
               AND actioned = false
             LIMIT 1
-          `;
+          `
 
           if (!alertCheck || alertCheck.length === 0) {
             // Find suggested tickets: unassigned + high priority
@@ -130,7 +130,7 @@ async function updateCapacityStatus() {
                   ELSE 5
                 END
               LIMIT 3
-            `;
+            `
 
             // Find the team lead to alert
             const leadRows = await sql`
@@ -140,10 +140,10 @@ async function updateCapacityStatus() {
                 AND du.role = 'team_lead'
                 AND du.active = true
               LIMIT 1
-            `;
-            const sentTo = leadRows && leadRows[0] ? leadRows[0].id : null;
+            `
+            const sentTo = leadRows?.[0] ? leadRows[0].id : null
 
-            const alertType = daysUnderloaded > 5 ? 'underloaded' : 'becoming_free';
+            const alertType = daysUnderloaded > 5 ? 'underloaded' : 'becoming_free'
 
             await sql`
               INSERT INTO availability_alerts (
@@ -157,14 +157,14 @@ async function updateCapacityStatus() {
                 ${sentTo},
                 NOW()
               )
-            `;
+            `
 
             // Mark alert sent
             await sql`
               UPDATE capacity_status
               SET alert_sent_today = true
               WHERE user_id = ${duid}
-            `;
+            `
           }
         }
 
@@ -174,23 +174,23 @@ async function updateCapacityStatus() {
           workloadPct: Math.round(workloadPct),
           availableCapacityPct: Math.round(availableCapacityPct),
           daysUnderloaded,
-        });
+        })
       } catch (userErr) {
-        console.error(`capacity: error for user ${user.dashboard_user_id}:`, userErr.message);
+        console.error(`capacity: error for user ${user.dashboard_user_id}:`, userErr.message)
       }
     }
   } catch (err) {
-    console.error('capacity.updateCapacityStatus: error:', err.message);
+    console.error('capacity.updateCapacityStatus: error:', err.message)
   }
 
-  return results;
+  return results
 }
 
 // ────────────────────────────────────────────────────────────────
 // getCapacityForTeam — Current capacity rows for a team
 // ────────────────────────────────────────────────────────────────
 async function getCapacityForTeam(team) {
-  const sql = getDb();
+  const sql = getDb()
   try {
     const rows = await sql`
       SELECT
@@ -202,11 +202,11 @@ async function getCapacityForTeam(team) {
       WHERE du.team = ${team}
         AND du.active = true
       ORDER BY cs.current_workload_pct DESC
-    `;
-    return rows || [];
+    `
+    return rows || []
   } catch (err) {
-    console.error('capacity.getCapacityForTeam: error:', err.message);
-    return [];
+    console.error('capacity.getCapacityForTeam: error:', err.message)
+    return []
   }
 }
 
@@ -214,9 +214,9 @@ async function getCapacityForTeam(team) {
 // getAvailableDevelopers — Users with capacity > 30%
 // ────────────────────────────────────────────────────────────────
 async function getAvailableDevelopers(team) {
-  const sql = getDb();
+  const sql = getDb()
   try {
-    let rows;
+    let rows
     if (team) {
       rows = await sql`
         SELECT
@@ -230,7 +230,7 @@ async function getAvailableDevelopers(team) {
           AND du.active = true
           AND cs.available_capacity_pct > 30
         ORDER BY cs.available_capacity_pct DESC
-      `;
+      `
     } else {
       rows = await sql`
         SELECT
@@ -243,12 +243,12 @@ async function getAvailableDevelopers(team) {
         WHERE du.active = true
           AND cs.available_capacity_pct > 30
         ORDER BY cs.available_capacity_pct DESC
-      `;
+      `
     }
-    return rows || [];
+    return rows || []
   } catch (err) {
-    console.error('capacity.getAvailableDevelopers: error:', err.message);
-    return [];
+    console.error('capacity.getAvailableDevelopers: error:', err.message)
+    return []
   }
 }
 
@@ -256,4 +256,4 @@ module.exports = {
   updateCapacityStatus,
   getCapacityForTeam,
   getAvailableDevelopers,
-};
+}

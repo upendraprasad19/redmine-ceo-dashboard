@@ -1,12 +1,12 @@
-const { getCurrentUser } = require('../../../lib/auth');
+const { getCurrentUser } = require('../../../lib/auth')
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'GET') return res.status(405).end()
 
   try {
-    const user = await getCurrentUser(req);
+    const user = await getCurrentUser(req)
     if (!user) {
-      return res.status(401).json({ error: 'Not authenticated' });
+      return res.status(401).json({ error: 'Not authenticated' })
     }
 
     res.status(200).json({
@@ -15,9 +15,9 @@ export default async function handler(req, res) {
       role: user.role,
       team: user.team,
       display_name: user.display_name,
-    });
+    })
   } catch (err) {
-    console.error('Auth me error:', err);
-    res.status(401).json({ error: 'Not authenticated' });
+    console.error('Auth me error:', err)
+    res.status(401).json({ error: 'Not authenticated' })
   }
 }

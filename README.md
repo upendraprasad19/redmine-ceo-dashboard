@@ -94,7 +94,8 @@ See `.env.example` for the full list. Minimum required:
 
 - `REDMINE_URL` / `REDMINE_API_KEY` — Redmine API access
 - `DATABASE_URL` — Neon Postgres connection string
-- `JWT_SECRET` — random string for session signing
+- `JWT_SECRET` — random string for session signing (>= 32 chars)
+- `CRON_SECRET` — shared secret for cron endpoint auth (set in Vercel env)
 
 ### Scripts
 
@@ -134,11 +135,11 @@ See `.env.example` for the full list. Minimum required:
 ├── scripts/
 │   ├── sync-redmine.js       # Standalone Redmine sync
 │   ├── sync-backfill.js      # One-time backfill
-│   ├── migrate.js            # Migration runner
-│   ├── migrations/           # SQL migration files (001-019)
+│   ├── migrate.js            # Migration runner (with _schema_migrations tracking)
+│   ├── migrations/           # SQL migration files (001-023)
 │   └── seed-admin.js         # Admin user seeder
 ├── tests/
-│   ├── unit/                 # Vitest unit tests
+│   ├── unit/                 # Vitest unit tests (10 files, 124 tests)
 │   └── e2e/                  # Playwright E2E tests
 └── intelligence/             # AI module (learning, matcher, reports, etc.)
 ```
@@ -151,11 +152,23 @@ See `.env.example` for the full list. Minimum required:
 4. Vercel Cron handles daily sync and scheduled briefings
 
 The Hobby plan supports 5 cron slots. Current usage:
-- Daily Redmine sync (`/api/sync`) — 1:00 AM
+- Daily Redmine sync (`/api/sync`) — 1:00 AM (uses `CRON_SECRET` header)
 - Morning briefing (`/api/cron/morning-briefing`) — 3:30 AM
 - Missing-log reminder (`/api/cron/missing-log-reminder`) — 11:30 AM weekdays
 - Friday summary (`/api/cron/friday-summary`) — 1:30 PM Friday
 - Weekly learning layer (`/api/cron/learning-layer`) — 8:30 PM Sunday
+
+All cron endpoints require the `CRON_SECRET` header for authentication.
+
+## Security
+
+- JWT auth with bcrypt password hashing
+- Rate limiting on login (10 req/min sliding window, Upstash Redis)
+- SSRF protection on sync-leave endpoint
+- Slack signature verification on all events
+- Cron auth via `CRON_SECRET` header (query-string secrets rejected)
+- API errors sanitized — no internal error messages exposed to clients
+- Security headers: HSTS, nosniff, DENY frame, referrer-policy
 
 ## License
 

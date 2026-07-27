@@ -3,7 +3,7 @@
  * Rule-based escalation engine: detects problems and escalates to the right person.
  */
 
-const { getDb } = require('../lib/db');
+const { getDb } = require('../lib/db')
 
 // ────────────────────────────────────────────────────────────────
 // Escalation rules
@@ -29,14 +29,14 @@ const ESCALATION_RULES = [
     description: 'User below 30% workload for 5+ consecutive days',
     severity: 'low',
   },
-];
+]
 
 // ────────────────────────────────────────────────────────────────
 // runEscalationEngine — Check all rules, log triggered escalations
 // ────────────────────────────────────────────────────────────────
 async function runEscalationEngine() {
-  const sql = getDb();
-  const triggered = [];
+  const sql = getDb()
+  const triggered = []
 
   try {
     // ── Rule 1: Tickets overdue by > 3 days ─────────────────────
@@ -51,7 +51,7 @@ async function runEscalationEngine() {
         WHERE i.due_date IS NOT NULL
           AND i.due_date < CURRENT_DATE - INTERVAL '3 days'
           AND i.status NOT IN ('Closed', 'Resolved', 'Verified', 'Rejected')
-      `;
+      `
 
       if (overdueTickets && overdueTickets.length > 0) {
         for (const ticket of overdueTickets) {
@@ -62,11 +62,11 @@ async function runEscalationEngine() {
               AND context->>'ticket_id' = ${String(ticket.redmine_id || ticket.id)}
               AND triggered_at >= CURRENT_DATE
             LIMIT 1
-          `;
-          if (existing && existing.length > 0) continue;
+          `
+          if (existing && existing.length > 0) continue
 
           // Find who to escalate to: team lead for the assignee's team
-          const escalateTo = await findEscalationTarget(sql, ticket.team);
+          const escalateTo = await findEscalationTarget(sql, ticket.team)
 
           const context = {
             ticket_id: String(ticket.redmine_id || ticket.id),
@@ -75,7 +75,7 @@ async function runEscalationEngine() {
             team: ticket.team,
             days_overdue: ticket.days_overdue,
             due_date: ticket.due_date,
-          };
+          }
 
           await sql`
             INSERT INTO escalation_log (
@@ -87,18 +87,18 @@ async function runEscalationEngine() {
               ${escalateTo},
               NOW()
             )
-          `;
+          `
 
           triggered.push({
             rule: 'ticket_overdue_3_days',
             severity: 'high',
             context,
             escalatedTo: escalateTo,
-          });
+          })
         }
       }
     } catch (ruleErr) {
-      console.error('escalation: ticket_overdue_3_days error:', ruleErr.message);
+      console.error('escalation: ticket_overdue_3_days error:', ruleErr.message)
     }
 
     // ── Rule 2: No time log for 2+ working days ────────────────
@@ -113,7 +113,7 @@ async function runEscalationEngine() {
         GROUP BY u.id, u.name, u.team
         HAVING MAX(te.spent_on) IS NULL
            OR MAX(te.spent_on) < CURRENT_DATE - INTERVAL '2 days'
-      `;
+      `
 
       if (noLogUsers && noLogUsers.length > 0) {
         for (const user of noLogUsers) {
@@ -124,8 +124,8 @@ async function runEscalationEngine() {
               AND start_date <= CURRENT_DATE
               AND end_date >= CURRENT_DATE
             LIMIT 1
-          `;
-          if (onLeave && onLeave.length > 0) continue;
+          `
+          if (onLeave && onLeave.length > 0) continue
 
           // Check if already escalated today
           const existing = await sql`
@@ -134,13 +134,15 @@ async function runEscalationEngine() {
               AND context->>'user_id' = ${String(user.id)}
               AND triggered_at >= CURRENT_DATE
             LIMIT 1
-          `;
-          if (existing && existing.length > 0) continue;
+          `
+          if (existing && existing.length > 0) continue
 
-          const escalateTo = await findEscalationTarget(sql, user.team);
+          const escalateTo = await findEscalationTarget(sql, user.team)
           const daysSince = user.last_logged
-            ? Math.floor((Date.now() - new Date(user.last_logged).getTime()) / (1000 * 60 * 60 * 24))
-            : null;
+            ? Math.floor(
+                (Date.now() - new Date(user.last_logged).getTime()) / (1000 * 60 * 60 * 24),
+              )
+            : null
 
           const context = {
             user_id: String(user.id),
@@ -148,7 +150,7 @@ async function runEscalationEngine() {
             team: user.team,
             last_logged: user.last_logged,
             days_since: daysSince,
-          };
+          }
 
           await sql`
             INSERT INTO escalation_log (
@@ -156,22 +158,22 @@ async function runEscalationEngine() {
             ) VALUES (
               'no_timelog_2_days',
               ${JSON.stringify(context)}::jsonb,
-              ${`${user.name} has not logged time for ${daysSince !== null ? daysSince + ' days' : 'an unknown period'}. Not on leave.`},
+              ${`${user.name} has not logged time for ${daysSince !== null ? `${daysSince} days` : 'an unknown period'}. Not on leave.`},
               ${escalateTo},
               NOW()
             )
-          `;
+          `
 
           triggered.push({
             rule: 'no_timelog_2_days',
             severity: 'medium',
             context,
             escalatedTo: escalateTo,
-          });
+          })
         }
       }
     } catch (ruleErr) {
-      console.error('escalation: no_timelog_2_days error:', ruleErr.message);
+      console.error('escalation: no_timelog_2_days error:', ruleErr.message)
     }
 
     // ── Rule 3: Blocked tickets for > 24 hours ─────────────────
@@ -185,7 +187,7 @@ async function runEscalationEngine() {
         LEFT JOIN users u ON u.id = i.assigned_to_id
         WHERE i.status = 'Blocked'
           AND i.updated_at < NOW() - INTERVAL '24 hours'
-      `;
+      `
 
       if (blockedTickets && blockedTickets.length > 0) {
         for (const ticket of blockedTickets) {
@@ -195,13 +197,13 @@ async function runEscalationEngine() {
               AND context->>'ticket_id' = ${String(ticket.redmine_id || ticket.id)}
               AND triggered_at >= CURRENT_DATE
             LIMIT 1
-          `;
-          if (existing && existing.length > 0) continue;
+          `
+          if (existing && existing.length > 0) continue
 
-          const escalateTo = await findEscalationTarget(sql, ticket.team);
+          const escalateTo = await findEscalationTarget(sql, ticket.team)
           const hoursBlocked = Math.round(
-            (Date.now() - new Date(ticket.blocked_since).getTime()) / (1000 * 60 * 60)
-          );
+            (Date.now() - new Date(ticket.blocked_since).getTime()) / (1000 * 60 * 60),
+          )
 
           const context = {
             ticket_id: String(ticket.redmine_id || ticket.id),
@@ -210,7 +212,7 @@ async function runEscalationEngine() {
             team: ticket.team,
             hours_blocked: hoursBlocked,
             blocked_since: ticket.blocked_since,
-          };
+          }
 
           await sql`
             INSERT INTO escalation_log (
@@ -222,18 +224,18 @@ async function runEscalationEngine() {
               ${escalateTo},
               NOW()
             )
-          `;
+          `
 
           triggered.push({
             rule: 'blocked_24h',
             severity: 'critical',
             context,
             escalatedTo: escalateTo,
-          });
+          })
         }
       }
     } catch (ruleErr) {
-      console.error('escalation: blocked_24h error:', ruleErr.message);
+      console.error('escalation: blocked_24h error:', ruleErr.message)
     }
 
     // ── Rule 4: Underloaded users (< 30% workload for 5+ days) ─
@@ -250,7 +252,7 @@ async function runEscalationEngine() {
         WHERE cs.days_underloaded >= 5
           AND cs.available_capacity_pct > 70
           AND du.active = true
-      `;
+      `
 
       if (underloaded && underloaded.length > 0) {
         for (const row of underloaded) {
@@ -260,10 +262,10 @@ async function runEscalationEngine() {
               AND context->>'user_id' = ${String(row.user_id)}
               AND triggered_at >= CURRENT_DATE
             LIMIT 1
-          `;
-          if (existing && existing.length > 0) continue;
+          `
+          if (existing && existing.length > 0) continue
 
-          const escalateTo = await findEscalationTarget(sql, row.team);
+          const escalateTo = await findEscalationTarget(sql, row.team)
 
           const context = {
             user_id: String(row.user_id),
@@ -271,7 +273,7 @@ async function runEscalationEngine() {
             team: row.team,
             days_underloaded: row.days_underloaded,
             available_capacity_pct: row.available_capacity_pct,
-          };
+          }
 
           await sql`
             INSERT INTO escalation_log (
@@ -283,35 +285,35 @@ async function runEscalationEngine() {
               ${escalateTo},
               NOW()
             )
-          `;
+          `
 
           triggered.push({
             rule: 'capacity_underloaded',
             severity: 'low',
             context,
             escalatedTo: escalateTo,
-          });
+          })
         }
       }
     } catch (ruleErr) {
-      console.error('escalation: capacity_underloaded error:', ruleErr.message);
+      console.error('escalation: capacity_underloaded error:', ruleErr.message)
     }
   } catch (err) {
-    console.error('escalation.runEscalationEngine: error:', err.message);
+    console.error('escalation.runEscalationEngine: error:', err.message)
   }
 
   return {
     triggered: triggered.length,
     escalations: triggered,
     rules: ESCALATION_RULES,
-  };
+  }
 }
 
 // ────────────────────────────────────────────────────────────────
 // findEscalationTarget — team_lead for the team, or any manager
 // ────────────────────────────────────────────────────────────────
 async function findEscalationTarget(sql, team) {
-  if (!team) return null;
+  if (!team) return null
 
   try {
     // Try team lead first
@@ -321,8 +323,8 @@ async function findEscalationTarget(sql, team) {
         AND role = 'team_lead'
         AND active = true
       LIMIT 1
-    `;
-    if (leadRows && leadRows.length > 0) return leadRows[0].id;
+    `
+    if (leadRows && leadRows.length > 0) return leadRows[0].id
 
     // Fall back to any manager
     const managerRows = await sql`
@@ -330,20 +332,20 @@ async function findEscalationTarget(sql, team) {
       WHERE role = 'manager'
         AND active = true
       LIMIT 1
-    `;
-    if (managerRows && managerRows.length > 0) return managerRows[0].id;
+    `
+    if (managerRows && managerRows.length > 0) return managerRows[0].id
   } catch (err) {
-    console.error('escalation.findEscalationTarget: error:', err.message);
+    console.error('escalation.findEscalationTarget: error:', err.message)
   }
 
-  return null;
+  return null
 }
 
 // ────────────────────────────────────────────────────────────────
 // getRecentEscalations — For dashboard display
 // ────────────────────────────────────────────────────────────────
 async function getRecentEscalations(limit = 20) {
-  const sql = getDb();
+  const sql = getDb()
   try {
     const rows = await sql`
       SELECT
@@ -353,11 +355,11 @@ async function getRecentEscalations(limit = 20) {
       LEFT JOIN dashboard_users du ON du.id = el.escalated_to
       ORDER BY el.triggered_at DESC
       LIMIT ${limit}
-    `;
-    return rows || [];
+    `
+    return rows || []
   } catch (err) {
-    console.error('escalation.getRecentEscalations: error:', err.message);
-    return [];
+    console.error('escalation.getRecentEscalations: error:', err.message)
+    return []
   }
 }
 
@@ -365,4 +367,4 @@ module.exports = {
   ESCALATION_RULES,
   runEscalationEngine,
   getRecentEscalations,
-};
+}

@@ -1,21 +1,22 @@
-import { getDb } from '../../../lib/db';
-const { getCurrentUser } = require('../../../lib/auth');
+import { getDb } from '../../../lib/db'
 
-const EXPECTED_TIME_TEAMS = ['AI','DB','DevOps','JS/UI','Java','QA'];
+const { getCurrentUser } = require('../../../lib/auth')
+const { send500 } = require('../../../lib/api-error')
+
+const EXPECTED_TIME_TEAMS = ['AI', 'DB', 'DevOps', 'JS/UI', 'Java', 'QA']
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'GET') return res.status(405).end()
 
   try {
-    const user = await getCurrentUser(req);
-    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    const user = await getCurrentUser(req)
+    if (!user) return res.status(401).json({ error: 'Not authenticated' })
 
-    const sql = getDb();
-    const isTeamLead = user.role === 'team_lead';
-    const team = user.team;
+    const sql = getDb()
+    const isTeamLead = user.role === 'team_lead'
+    const team = user.team
 
     const [load, timeLog] = await Promise.all([
-
       // Developer Load — active ticket counts per developer
       // total includes assigned tickets + tickets where user logged time
       // breakdown counts (New, In Progress, etc.) from assigned tickets only
@@ -117,20 +118,22 @@ export default async function handler(req, res) {
               AND u.team = ANY(${EXPECTED_TIME_TEAMS}::text[])
             GROUP BY u.id, u.name, u.team
             ORDER BY u.team, u.name`,
-    ]);
+    ])
 
     // Derive logging status
-    const timeLogWithStatus = timeLog.map(row => ({
+    const timeLogWithStatus = timeLog.map((row) => ({
       ...row,
       logging_status:
-        row.hours_last_7days === 0 ? 'No Log This Week'
-        : row.days_since_last_log >= 3 ? `No Log in 3+ Days`
-        : 'Logged Recently',
-    }));
+        row.hours_last_7days === 0
+          ? 'No Log This Week'
+          : row.days_since_last_log >= 3
+            ? `No Log in 3+ Days`
+            : 'Logged Recently',
+    }))
 
-    res.status(200).json({ load, timeLog: timeLogWithStatus });
+    res.status(200).json({ load, timeLog: timeLogWithStatus })
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error(err)
+    send500(res, err, 'developer-load')
   }
 }

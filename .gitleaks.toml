@@ -1,0 +1,38 @@
+# Gitleaks configuration — extends default rules
+# https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+
+[extend]
+useDefault = true
+
+# Global allowlists — apply to all rules
+[[allowlists]]
+description = "Build output and generated files"
+paths = [
+  '''\.next[/\\]''',
+  '''node_modules[/\\]''',
+  '''dist[/\\]''',
+  '''coverage[/\\]''',
+  '''\.git[/\\]''',
+]
+
+[[allowlists]]
+description = "Test fixtures and schema files"
+paths = [
+  '''schema/contract\.sql$''',
+  '''tests/unit/.*\.test\.js$''',
+  '''\.gitleaksignore$''',
+]
+
+[[allowlists]]
+description = "Config files with placeholder values"
+paths = [
+  '''biome\.json$''',
+  '''vitest\.config\.js$''',
+  '''commitlint\.config\.js$''',
+  '''lint-staged\.config\.js$''',
+]
+regexes = [
+  '''(?i)your[_-]?api[_-]?key''',
+  '''(?i)replace[_-]?me''',
+  '''(?i)xxx+''',
+]

@@ -14,25 +14,25 @@
  * For Socket Mode, handlers are registered directly in bots/slack/index.js.
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto')
 
 // Disable Next.js body parsing — we need the raw body for signature verification
 export const config = {
   api: {
     bodyParser: false,
   },
-};
+}
 
 /**
  * Read the raw request body as a string.
  */
 function getRawBody(req) {
   return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    req.on('error', reject);
-  });
+    const chunks = []
+    req.on('data', (chunk) => chunks.push(chunk))
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
+    req.on('error', reject)
+  })
 }
 
 /**
@@ -40,93 +40,92 @@ function getRawBody(req) {
  * @see https://api.slack.com/authentication/verifying-requests-from-slack
  */
 function verifySlackSignature(rawBody, timestamp, signature) {
-  const signingSecret = process.env.SLACK_SIGNING_SECRET;
-  if (!signingSecret) return false;
+  const signingSecret = process.env.SLACK_SIGNING_SECRET
+  if (!signingSecret) return false
 
   // Reject requests older than 5 minutes to prevent replay attacks
-  const currentTime = Math.floor(Date.now() / 1000);
+  const currentTime = Math.floor(Date.now() / 1000)
   if (Math.abs(currentTime - parseInt(timestamp, 10)) > 300) {
-    return false;
+    return false
   }
 
-  const sigBasestring = `v0:${timestamp}:${rawBody}`;
-  const mySignature = 'v0=' + crypto
-    .createHmac('sha256', signingSecret)
-    .update(sigBasestring)
-    .digest('hex');
+  const sigBasestring = `v0:${timestamp}:${rawBody}`
+  const mySignature = `v0=${crypto.createHmac('sha256', signingSecret).update(sigBasestring).digest('hex')}`
 
-  return crypto.timingSafeEqual(
-    Buffer.from(mySignature),
-    Buffer.from(signature)
-  );
+  return crypto.timingSafeEqual(Buffer.from(mySignature), Buffer.from(signature))
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
-    const rawBody = await getRawBody(req);
-    const timestamp = req.headers['x-slack-request-timestamp'];
-    const signature = req.headers['x-slack-signature'];
+    const rawBody = await getRawBody(req)
+    const timestamp = req.headers['x-slack-request-timestamp']
+    const signature = req.headers['x-slack-signature']
 
     // ── Signature verification ──
-    if (timestamp && signature) {
-      const valid = verifySlackSignature(rawBody, timestamp, signature);
+    // url_verification challenge doesn't carry signature headers
+    if (payload?.type !== 'url_verification') {
+      if (!timestamp || !signature) {
+        return res.status(401).json({ error: 'Missing Slack signature headers' })
+      }
+      const valid = verifySlackSignature(rawBody, timestamp, signature)
       if (!valid) {
-        console.warn('Slack events: Invalid signature');
-        return res.status(401).json({ error: 'Invalid signature' });
+        console.warn('Slack events: Invalid signature')
+        return res.status(401).json({ error: 'Invalid signature' })
       }
     }
 
     // ── Determine payload type ──
-    let payload;
-    const contentType = req.headers['content-type'] || '';
+    let payload
+    const contentType = req.headers['content-type'] || ''
 
     if (contentType.includes('application/x-www-form-urlencoded')) {
       // Interactive payloads come as form-urlencoded with a `payload` field
-      const params = new URLSearchParams(rawBody);
-      const payloadStr = params.get('payload');
+      const params = new URLSearchParams(rawBody)
+      const payloadStr = params.get('payload')
       if (!payloadStr) {
-        return res.status(400).json({ error: 'Missing payload' });
+        return res.status(400).json({ error: 'Missing payload' })
       }
-      payload = JSON.parse(payloadStr);
-      return await handleInteraction(payload, res);
+      payload = JSON.parse(payloadStr)
+      return await handleInteraction(payload, res)
     }
 
     // Events API sends JSON
-    payload = JSON.parse(rawBody);
+    payload = JSON.parse(rawBody)
 
     // ── URL verification challenge ──
     if (payload.type === 'url_verification') {
-      return res.status(200).json({ challenge: payload.challenge });
+      return res.status(200).json({ challenge: payload.challenge })
     }
 
     // ── Event callback ──
     if (payload.type === 'event_callback') {
-      const event = payload.event;
+      const event = payload.event
       if (!event) {
-        return res.status(200).json({ ok: true });
+        return res.status(200).json({ ok: true })
       }
 
       // Acknowledge immediately — Slack expects a 200 within 3 seconds
-      res.status(200).json({ ok: true });
+      res.status(200).json({ ok: true })
 
       // Process the event asynchronously
-      setImmediate(() => processEvent(event).catch(err => {
-        console.error('Slack event processing error:', err);
-      }));
-      return;
+      setImmediate(() =>
+        processEvent(event).catch((err) => {
+          console.error('Slack event processing error:', err)
+        }),
+      )
+      return
     }
 
     // Unknown event type
-    return res.status(200).json({ ok: true });
-
+    return res.status(200).json({ ok: true })
   } catch (err) {
-    console.error('Slack events handler error:', err);
+    console.error('Slack events handler error:', err)
     // Always return 200 to prevent Slack from retrying
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({ ok: true })
   }
 }
 
@@ -135,57 +134,57 @@ export default async function handler(req, res) {
  */
 async function processEvent(event) {
   // Ignore bot messages and message changes
-  if (event.subtype) return;
-  if (event.bot_id) return;
+  if (event.subtype) return
+  if (event.bot_id) return
 
   // Direct messages to the bot
   if (event.type === 'message' && event.channel_type === 'im') {
-    const { handleDevMessage } = require('../../../bots/slack/dev-queries');
-    const { resolveSlackUser, sendDirectMessage } = require('../../../bots/slack/index');
+    const { handleDevMessage } = require('../../../bots/slack/dev-queries')
+    const { resolveSlackUser, sendDirectMessage } = require('../../../bots/slack/index')
 
     // Build a minimal `say` function for the serverless context
     const say = async (msgOrObj) => {
-      const text = typeof msgOrObj === 'string' ? msgOrObj : msgOrObj.text;
-      const blocks = typeof msgOrObj === 'object' ? msgOrObj.blocks : undefined;
-      await sendDirectMessage(event.user, text, blocks);
-    };
+      const text = typeof msgOrObj === 'string' ? msgOrObj : msgOrObj.text
+      const blocks = typeof msgOrObj === 'object' ? msgOrObj.blocks : undefined
+      await sendDirectMessage(event.user, text, blocks)
+    }
 
     // Minimal client stub — in serverless mode, postEphemeral is a no-op
-    const { getSlackApp } = require('../../../bots/slack/index');
-    const app = getSlackApp();
-    const client = app ? app.client : null;
+    const { getSlackApp } = require('../../../bots/slack/index')
+    const app = getSlackApp()
+    const client = app ? app.client : null
 
     await handleDevMessage(
       { user: event.user, text: event.text || '', channel: event.channel },
       say,
-      client
-    );
-    return;
+      client,
+    )
+    return
   }
 
   // App mention in channels
   if (event.type === 'app_mention') {
-    const { handleDevMessage } = require('../../../bots/slack/dev-queries');
-    const { sendDirectMessage, getSlackApp } = require('../../../bots/slack/index');
+    const { handleDevMessage } = require('../../../bots/slack/dev-queries')
+    const { sendDirectMessage, getSlackApp } = require('../../../bots/slack/index')
 
     const say = async (msgOrObj) => {
-      const text = typeof msgOrObj === 'string' ? msgOrObj : msgOrObj.text;
-      const blocks = typeof msgOrObj === 'object' ? msgOrObj.blocks : undefined;
-      await sendDirectMessage(event.user, text, blocks);
-    };
+      const text = typeof msgOrObj === 'string' ? msgOrObj : msgOrObj.text
+      const blocks = typeof msgOrObj === 'object' ? msgOrObj.blocks : undefined
+      await sendDirectMessage(event.user, text, blocks)
+    }
 
-    const app = getSlackApp();
-    const client = app ? app.client : null;
+    const app = getSlackApp()
+    const client = app ? app.client : null
 
     // Strip the bot mention from the text
-    const cleanText = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim();
+    const cleanText = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim()
 
     await handleDevMessage(
       { user: event.user, text: cleanText, channel: event.channel },
       say,
-      client
-    );
-    return;
+      client,
+    )
+    return
   }
 }
 
@@ -194,15 +193,15 @@ async function processEvent(event) {
  */
 async function handleInteraction(payload, res) {
   // Acknowledge immediately
-  res.status(200).json({ ok: true });
+  res.status(200).json({ ok: true })
 
-  const { getSlackApp } = require('../../../bots/slack/index');
-  const app = getSlackApp();
-  const client = app ? app.client : null;
+  const { getSlackApp } = require('../../../bots/slack/index')
+  const app = getSlackApp()
+  const client = app ? app.client : null
 
   if (!client) {
-    console.warn('Slack events: Cannot handle interaction — app not initialized');
-    return;
+    console.warn('Slack events: Cannot handle interaction — app not initialized')
+    return
   }
 
   setImmediate(async () => {
@@ -211,22 +210,22 @@ async function handleInteraction(payload, res) {
         for (const action of payload.actions || []) {
           switch (action.action_id) {
             case 'ticket_status_change': {
-              const { handleStatusChange } = require('../../../bots/slack/tickets');
-              await handleStatusChange(payload, action, client);
-              break;
+              const { handleStatusChange } = require('../../../bots/slack/tickets')
+              await handleStatusChange(payload, action, client)
+              break
             }
             case 'ticket_mark_done': {
-              const { handleTicketDone } = require('../../../bots/slack/tickets');
-              await handleTicketDone(payload, action, client);
-              break;
+              const { handleTicketDone } = require('../../../bots/slack/tickets')
+              await handleTicketDone(payload, action, client)
+              break
             }
             case 'report_blocker': {
-              const { handleBlockerButton } = require('../../../bots/slack/blockers');
-              await handleBlockerButton(payload, client);
-              break;
+              const { handleBlockerButton } = require('../../../bots/slack/blockers')
+              await handleBlockerButton(payload, client)
+              break
             }
             default:
-              console.log('Slack events: Unhandled action_id:', action.action_id);
+              console.log('Slack events: Unhandled action_id:', action.action_id)
           }
         }
       }
@@ -234,16 +233,16 @@ async function handleInteraction(payload, res) {
       if (payload.type === 'view_submission') {
         switch (payload.view?.callback_id) {
           case 'blocker_submission': {
-            const { handleBlockerSubmission } = require('../../../bots/slack/blockers');
-            await handleBlockerSubmission(payload, payload.view, client);
-            break;
+            const { handleBlockerSubmission } = require('../../../bots/slack/blockers')
+            await handleBlockerSubmission(payload, payload.view, client)
+            break
           }
           default:
-            console.log('Slack events: Unhandled view callback_id:', payload.view?.callback_id);
+            console.log('Slack events: Unhandled view callback_id:', payload.view?.callback_id)
         }
       }
     } catch (err) {
-      console.error('Slack interaction processing error:', err);
+      console.error('Slack interaction processing error:', err)
     }
-  });
+  })
 }

@@ -5,25 +5,26 @@
  *   notifying the originator with escalate/close buttons.
  */
 
-const { getDb } = require('../lib/db');
-const { logEvent, transitionStatus } = require('../lib/intimation-relay');
+const { getDb } = require('../lib/db')
+const { logEvent, transitionStatus } = require('../lib/intimation-relay')
 
 async function tgSend(chat_id, text, reply_markup = null) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const body = { chat_id, text, parse_mode: 'Markdown' };
-  if (reply_markup) body.reply_markup = reply_markup;
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  const body = { chat_id, text, parse_mode: 'Markdown' }
+  if (reply_markup) body.reply_markup = reply_markup
   const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
-  const data = await r.json();
-  if (!data.ok) throw new Error(`Telegram sendMessage failed: ${data.description}`);
+  })
+  const data = await r.json()
+  if (!data.ok) throw new Error(`Telegram sendMessage failed: ${data.description}`)
 }
 
 async function runIntimationFollowup() {
-  const sql = getDb();
-  let nudged = 0, closed = 0;
+  const sql = getDb()
+  let nudged = 0,
+    closed = 0
 
   // 4h nudge: status='sent' AND last_event_at < now - 4h
   const toNudge = await sql`
@@ -38,16 +39,21 @@ async function runIntimationFollowup() {
      WHERE t.status = 'sent'
        AND t.last_event_at < NOW() - INTERVAL '4 hours'
      LIMIT 50
-  `;
+  `
   for (const row of toNudge) {
     try {
-      const msg = `Gentle reminder — *${row.originator_name}* is waiting on status for [TK-${row.redmine_id}](https://redmine.thinkingcode.com/issues/${row.redmine_id}).`;
-      await tgSend(row.target_tg, msg);
-      await logEvent({ thread_id: row.id, actor_id: null, event_type: 'nudged', payload: { reason: '4h_no_response' } });
-      await transitionStatus(row.id, 'timeout_nudged');
-      nudged++;
+      const msg = `Gentle reminder — *${row.originator_name}* is waiting on status for [TK-${row.redmine_id}](https://redmine.thinkingcode.com/issues/${row.redmine_id}).`
+      await tgSend(row.target_tg, msg)
+      await logEvent({
+        thread_id: row.id,
+        actor_id: null,
+        event_type: 'nudged',
+        payload: { reason: '4h_no_response' },
+      })
+      await transitionStatus(row.id, 'timeout_nudged')
+      nudged++
     } catch (e) {
-      console.error('nudge failed', row.id, e.message);
+      console.error('nudge failed', row.id, e.message)
     }
   }
 
@@ -64,26 +70,33 @@ async function runIntimationFollowup() {
      WHERE t.status = 'timeout_nudged'
        AND t.created_at < NOW() - INTERVAL '24 hours'
      LIMIT 50
-  `;
+  `
   for (const row of toClose) {
     try {
-      const msg = `*${row.target_name}* hasn't responded about [TK-${row.redmine_id}](https://redmine.thinkingcode.com/issues/${row.redmine_id}) in 24h.`;
+      const msg = `*${row.target_name}* hasn't responded about [TK-${row.redmine_id}](https://redmine.thinkingcode.com/issues/${row.redmine_id}) in 24h.`
       const kb = {
-        inline_keyboard: [[
-          { text: 'Escalate to TL', callback_data: `int:escalate:${row.id}` },
-          { text: 'Close', callback_data: `int:close:${row.id}` },
-        ]],
-      };
-      await tgSend(row.originator_tg, msg, kb);
-      await transitionStatus(row.id, 'no_response');
-      await logEvent({ thread_id: row.id, actor_id: null, event_type: 'closed', payload: { reason: '24h_no_response' } });
-      closed++;
+        inline_keyboard: [
+          [
+            { text: 'Escalate to TL', callback_data: `int:escalate:${row.id}` },
+            { text: 'Close', callback_data: `int:close:${row.id}` },
+          ],
+        ],
+      }
+      await tgSend(row.originator_tg, msg, kb)
+      await transitionStatus(row.id, 'no_response')
+      await logEvent({
+        thread_id: row.id,
+        actor_id: null,
+        event_type: 'closed',
+        payload: { reason: '24h_no_response' },
+      })
+      closed++
     } catch (e) {
-      console.error('close failed', row.id, e.message);
+      console.error('close failed', row.id, e.message)
     }
   }
 
-  return { nudged, closed };
+  return { nudged, closed }
 }
 
-module.exports = { runIntimationFollowup };
+module.exports = { runIntimationFollowup }
