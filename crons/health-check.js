@@ -219,6 +219,48 @@ async function runHealthCheck() {
     warn('TIME_DRIFT_FAILED', 'Time entry drift check failed', err.message)
   }
 
+  // ── 7. Table usage audit ─────────────────────────────────────────
+  const TABLE_AUDIT_TIMEOUT_MS = 5000
+  try {
+    const { auditTableUsage } = require('../lib/table-audit')
+    const auditResult = await Promise.race([
+      auditTableUsage(sql),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Table audit timed out')), TABLE_AUDIT_TIMEOUT_MS),
+      ),
+    ])
+
+    report.checks.tableAudit = {
+      totalFiles: auditResult.totalFiles,
+      phantomWrites: auditResult.phantomWrites,
+      deadTables: auditResult.deadTables,
+      readOnlyTables: auditResult.readOnlyTables,
+      ok: auditResult.ok,
+    }
+
+    if (!auditResult.ok && auditResult.error) {
+      warn('TABLE_AUDIT_ERROR', auditResult.error)
+    } else {
+      if (auditResult.phantomWrites.length > 0) {
+        warn(
+          'PHANTOM_WRITES',
+          `${auditResult.phantomWrites.length} table(s) referenced in code but missing from DB`,
+          { tables: auditResult.phantomWrites },
+        )
+      }
+      if (auditResult.deadTables.length > 0) {
+        warn(
+          'DEAD_TABLES',
+          `${auditResult.deadTables.length} table(s) in DB but not referenced in code`,
+          { tables: auditResult.deadTables },
+        )
+      }
+    }
+  } catch (err) {
+    report.checks.tableAudit = { error: err.message }
+    warn('TABLE_AUDIT_FAILED', 'Table usage audit failed', err.message)
+  }
+
   report.warningCount = report.warnings.length
   report.healthy = report.warnings.length === 0
   console.log(`[HEALTH-CHECK] Done. ${report.warningCount} warning(s).`)

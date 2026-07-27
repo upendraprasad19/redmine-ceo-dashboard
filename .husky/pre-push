@@ -1,1 +1,1 @@
-npm run test:unit && node scripts/board.js validate
+npm run test:unit && node scripts/board.js validate && npm run build
