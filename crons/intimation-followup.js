@@ -7,18 +7,11 @@
 
 const { getDb } = require('../lib/db')
 const { logEvent, transitionStatus } = require('../lib/intimation-relay')
+const { sendTelegramMessage } = require('../lib/telegram')
 
-async function tgSend(chat_id, text, reply_markup = null) {
-  const token = process.env.TELEGRAM_BOT_TOKEN
-  const body = { chat_id, text, parse_mode: 'Markdown' }
-  if (reply_markup) body.reply_markup = reply_markup
-  const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await r.json()
-  if (!data.ok) throw new Error(`Telegram sendMessage failed: ${data.description}`)
+async function tgSend(chatId, text, replyMarkup) {
+  const result = await sendTelegramMessage(chatId, text, { reply_markup: replyMarkup })
+  if (!result.ok) throw new Error(result.description || result.reason || 'Telegram send failed')
 }
 
 async function runIntimationFollowup() {

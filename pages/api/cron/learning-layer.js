@@ -2,10 +2,12 @@
  * pages/api/cron/learning-layer.js
  * Weekly: analyzes chat_history to learn each user's interests.
  * Auto-updates top_concerns based on what they ask about most.
- * Cron: 20:30 UTC Sunday = 2:00 AM IST Monday
+ * Cron: 21:00 UTC Sunday (shifted from 20:30 to align with batch handler :00)
+ * Protected by CRON_SECRET header (dual auth: Bearer or x-cron-secret).
  */
 
 import { getDb } from '../../../lib/db'
+import { send500 } from '../../../lib/api-error'
 
 const TOPIC_PATTERNS = [
   { topic: 'overdue_tickets', patterns: ['overdue', 'late', 'past due', 'missed deadline'] },
@@ -22,57 +24,66 @@ const TOPIC_PATTERNS = [
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end()
 
-  const secret = req.headers['x-cron-secret']
-  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' })
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) return res.status(500).json({ error: 'CRON_SECRET not configured' })
 
-  const sql = getDb()
+  const bearerToken = req.headers.authorization ? req.headers.authorization.replace('Bearer ', '') : null
+  const headerSecret = req.headers['x-cron-secret']
+  if (bearerToken !== cronSecret && headerSecret !== cronSecret) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
 
   try {
-    const recentChats = await sql`
-      SELECT user_id, content
-      FROM chat_history
-      WHERE role = 'user' AND created_at >= NOW() - INTERVAL '7 days'
-      ORDER BY user_id, created_at
-    `
-
-    // Group messages by user
-    const byUser = {}
-    for (const row of recentChats) {
-      if (!byUser[row.user_id]) byUser[row.user_id] = []
-      byUser[row.user_id].push(row.content.toLowerCase())
-    }
-
-    let updated = 0
-    for (const [userId, messages] of Object.entries(byUser)) {
-      const combined = messages.join(' ')
-      const topicCounts = {}
-
-      for (const { topic, patterns } of TOPIC_PATTERNS) {
-        let count = 0
-        for (const p of patterns) {
-          count += (combined.match(new RegExp(p, 'gi')) || []).length
-        }
-        if (count >= 2) topicCounts[topic] = count
-      }
-
-      if (Object.keys(topicCounts).length === 0) continue
-
-      const newConcerns = Object.entries(topicCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([t]) => t)
-
-      const existing = await sql`SELECT top_concerns FROM dashboard_users WHERE id = ${userId}`
-      const current = existing[0]?.top_concerns || []
-      const merged = [...new Set([...current, ...newConcerns])].slice(0, 5)
-
-      await sql`UPDATE dashboard_users SET top_concerns = ${merged}, updated_at = NOW() WHERE id = ${userId}`
-      updated++
-    }
-
-    return res.status(200).json({ ok: true, users_analyzed: Object.keys(byUser).length, updated })
+    const result = await runLearningLayer()
+    return res.status(200).json(result)
   } catch (err) {
-    console.error('Learning layer error:', err)
-    return res.status(500).json({ error: 'Internal server error' })
+    return send500(res, err)
   }
+}
+
+export async function runLearningLayer() {
+  const sql = getDb()
+
+  const recentChats = await sql`
+    SELECT user_id, content
+    FROM chat_history
+    WHERE role = 'user' AND created_at >= NOW() - INTERVAL '7 days'
+    ORDER BY user_id, created_at
+  `
+
+  const byUser = {}
+  for (const row of recentChats) {
+    if (!byUser[row.user_id]) byUser[row.user_id] = []
+    byUser[row.user_id].push(row.content.toLowerCase())
+  }
+
+  let updated = 0
+  for (const [userId, messages] of Object.entries(byUser)) {
+    const combined = messages.join(' ')
+    const topicCounts = {}
+
+    for (const { topic, patterns } of TOPIC_PATTERNS) {
+      let count = 0
+      for (const p of patterns) {
+        count += (combined.match(new RegExp(p, 'gi')) || []).length
+      }
+      if (count >= 2) topicCounts[topic] = count
+    }
+
+    if (Object.keys(topicCounts).length === 0) continue
+
+    const newConcerns = Object.entries(topicCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([t]) => t)
+
+    const existing = await sql`SELECT top_concerns FROM dashboard_users WHERE id = ${userId}`
+    const current = existing[0]?.top_concerns || []
+    const merged = [...new Set([...current, ...newConcerns])].slice(0, 5)
+
+    await sql`UPDATE dashboard_users SET top_concerns = ${merged}, updated_at = NOW() WHERE id = ${userId}`
+    updated++
+  }
+
+  return { ok: true, users_analyzed: Object.keys(byUser).length, updated }
 }

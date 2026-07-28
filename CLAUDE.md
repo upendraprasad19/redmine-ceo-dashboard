@@ -99,8 +99,9 @@ ticket and have responses relayed back. Implemented in:
 - `lib/commitments.js` — AI extraction + storage of dev commitments.
 - `bots/telegram/handlers/intimation.js` — callback handler.
 - `crons/intimation-followup.js`, `crons/commitment-followup.js`,
-  `crons/chat-enrichment.js` — dispatched by `pages/api/cron/phase1-tick.js`
-  every 15 min.
+  `crons/chat-enrichment.js` — dispatched hourly via `pages/api/cron/run.js`
+  batch handler (previously every 15 min via `phase1-tick.js`, consolidated
+  into `run.js` in Jul 2026).
 - AI tools: `propose_intimation`, `extract_commitment` in `lib/gpt-tools.js`.
 
 Conventions introduced:

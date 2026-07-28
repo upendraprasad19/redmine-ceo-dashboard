@@ -5,24 +5,8 @@
       "schedule": "0 1 * * *"
     },
     {
-      "path": "/api/cron/morning-briefing",
-      "schedule": "30 3 * * *"
-    },
-    {
-      "path": "/api/cron/missing-log-reminder",
-      "schedule": "30 11 * * 1-5"
-    },
-    {
-      "path": "/api/cron/friday-summary",
-      "schedule": "30 13 * * 5"
-    },
-    {
-      "path": "/api/cron/learning-layer",
-      "schedule": "30 20 * * 0"
-    },
-    {
-      "path": "/api/cron/run?job=health-check",
-      "schedule": "0 4 * * 1"
+      "path": "/api/cron/run?job=batch",
+      "schedule": "0 * * * *"
     }
   ]
 }

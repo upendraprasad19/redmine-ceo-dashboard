@@ -1,11 +1,13 @@
 /**
  * pages/api/cron/friday-summary.js
  * Sends weekly org summary to all managers every Friday.
- * Cron: 13:30 UTC Friday = 7:00 PM IST
+ * Cron: 14:00 UTC Friday (shifted from 13:30 to align with batch handler :00)
+ * Protected by CRON_SECRET header (dual auth: Bearer or x-cron-secret).
  */
 
 import { getDb } from '../../../lib/db'
 import { sendTelegramMessage } from '../../../lib/telegram'
+import { send500 } from '../../../lib/api-error'
 
 const APPROVED_REDMINE_IDS = [
   2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
@@ -15,67 +17,72 @@ const APPROVED_REDMINE_IDS = [
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end()
 
-  const secret = req.headers['x-cron-secret']
-  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' })
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) return res.status(500).json({ error: 'CRON_SECRET not configured' })
 
-  const sql = getDb()
-  const _TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+  const bearerToken = req.headers.authorization ? req.headers.authorization.replace('Bearer ', '') : null
+  const headerSecret = req.headers['x-cron-secret']
+  if (bearerToken !== cronSecret && headerSecret !== cronSecret) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
 
   try {
-    const managers = await sql`
-      SELECT id, display_name, telegram_id
-      FROM dashboard_users
-      WHERE active = true AND role = 'manager' AND telegram_id IS NOT NULL
-    `
-
-    const [velocity, compliance, overdue, topProjects] = await Promise.all([
-      sql`SELECT COUNT(*) AS count FROM issues WHERE status IN ('Closed','Resolved') AND updated_at >= NOW() - INTERVAL '7 days' AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
-      sql`
-        SELECT ROUND(COUNT(DISTINCT te.user_id) * 100.0 / NULLIF((SELECT COUNT(*) FROM users WHERE active = true), 0)) AS pct
-        FROM time_entries te WHERE te.spent_on >= CURRENT_DATE - 7
-      `,
-      sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved','Verified','Rejected') AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
-      sql`
-        SELECT p.name,
-          (SELECT COUNT(*) FROM issues WHERE project_id = p.id AND status NOT IN ('Closed','Resolved','Verified','Rejected')) AS open_tickets
-        FROM projects p WHERE p.status = 'active' AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]) ORDER BY open_tickets DESC LIMIT 5
-      `,
-    ])
-
-    const closed = parseInt(velocity[0]?.count || 0, 10)
-    const pct = parseInt(compliance[0]?.pct || 0, 10)
-    const overdueCount = parseInt(overdue[0]?.count || 0, 10)
-
-    const dateStr = new Date().toLocaleDateString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      day: 'numeric',
-      month: 'long',
-    })
-
-    const lines = [
-      `📊 *Weekly Summary — ${dateStr}*\n`,
-      `✅ Tickets closed this week: *${closed}*`,
-      `⏰ Time log compliance: *${pct}%*`,
-      `🔴 Currently overdue: *${overdueCount}*\n`,
-      `*Top Projects by Open Tickets:*`,
-      ...topProjects.map((p) => `  • ${p.name}: *${p.open_tickets}* open`),
-      `\nHave a great weekend! 🎉`,
-    ]
-
-    const msg = lines.join('\n')
-    let sent = 0
-    for (const m of managers) {
-      try {
-        await sendTelegramMessage(m.telegram_id, msg)
-        sent++
-      } catch (e) {
-        console.error(`Friday summary failed for ${m.display_name}:`, e.message)
-      }
-    }
-
-    return res.status(200).json({ ok: true, sent })
+    const result = await runFridaySummary()
+    return res.status(200).json(result)
   } catch (err) {
-    console.error('Friday summary error:', err)
-    return res.status(500).json({ error: 'Internal server error' })
+    return send500(res, err)
   }
+}
+
+export async function runFridaySummary() {
+  const sql = getDb()
+
+  const managers = await sql`
+    SELECT id, display_name, telegram_id
+    FROM dashboard_users
+    WHERE active = true AND role = 'manager' AND telegram_id IS NOT NULL
+  `
+
+  const [velocity, compliance, overdue, topProjects] = await Promise.all([
+    sql`SELECT COUNT(*) AS count FROM issues WHERE status IN ('Closed','Resolved') AND updated_at >= NOW() - INTERVAL '7 days' AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
+    sql`
+      SELECT ROUND(COUNT(DISTINCT te.user_id) * 100.0 / NULLIF((SELECT COUNT(*) FROM users WHERE active = true), 0)) AS pct
+      FROM time_entries te WHERE te.spent_on >= CURRENT_DATE - 7
+    `,
+    sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved','Verified','Rejected') AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
+    sql`
+      SELECT p.name,
+        (SELECT COUNT(*) FROM issues WHERE project_id = p.id AND status NOT IN ('Closed','Resolved','Verified','Rejected')) AS open_tickets
+      FROM projects p WHERE p.status = 'active' AND p.redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]) ORDER BY open_tickets DESC LIMIT 5
+    `,
+  ])
+
+  const closed = parseInt(velocity[0]?.count || 0, 10)
+  const pct = parseInt(compliance[0]?.pct || 0, 10)
+  const overdueCount = parseInt(overdue[0]?.count || 0, 10)
+
+  const dateStr = new Date().toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'long',
+  })
+
+  const lines = [
+    `📊 *Weekly Summary — ${dateStr}*\n`,
+    `✅ Tickets closed this week: *${closed}*`,
+    `⏰ Time log compliance: *${pct}%*`,
+    `🔴 Currently overdue: *${overdueCount}*\n`,
+    `*Top Projects by Open Tickets:*`,
+    ...topProjects.map((p) => `  • ${p.name}: *${p.open_tickets}* open`),
+    `\nHave a great weekend! 🎉`,
+  ]
+
+  const msg = lines.join('\n')
+  let sent = 0
+  for (const m of managers) {
+    const result = await sendTelegramMessage(m.telegram_id, msg)
+    if (result.ok) sent++
+  }
+
+  return { ok: true, sent }
 }

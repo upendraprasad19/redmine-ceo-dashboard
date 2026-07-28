@@ -1,12 +1,13 @@
 /**
  * pages/api/cron/morning-briefing.js
  * Sends personalized morning briefing to all active users with briefing enabled.
- * Cron: 03:30 UTC daily = 9:00 AM IST
- * Protected by CRON_SECRET header.
+ * Cron: 04:00 UTC daily (shifted from 03:30 to align with batch handler :00)
+ * Protected by CRON_SECRET header (dual auth: Bearer or x-cron-secret).
  */
 
 import { getDb } from '../../../lib/db'
 import { sendTelegramMessage } from '../../../lib/telegram'
+import { send500 } from '../../../lib/api-error'
 
 const APPROVED_REDMINE_IDS = [
   2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
@@ -16,62 +17,70 @@ const APPROVED_REDMINE_IDS = [
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end()
 
-  const secret = req.headers['x-cron-secret']
-  if (secret !== process.env.CRON_SECRET) {
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) return res.status(500).json({ error: 'CRON_SECRET not configured' })
+
+  const bearerToken = req.headers.authorization ? req.headers.authorization.replace('Bearer ', '') : null
+  const headerSecret = req.headers['x-cron-secret']
+  if (bearerToken !== cronSecret && headerSecret !== cronSecret) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
+  try {
+    const result = await runMorningBriefing()
+    return res.status(200).json(result)
+  } catch (err) {
+    return send500(res, err)
+  }
+}
+
+export async function runMorningBriefing() {
   const sql = getDb()
   const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN
-  if (!TELEGRAM_TOKEN) return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN not set' })
+  if (!TELEGRAM_TOKEN) throw new Error('TELEGRAM_BOT_TOKEN not set')
 
-  try {
-    const users = await sql`
-      SELECT id, display_name, username, role, team, telegram_id,
-             behavior_profile, top_concerns, morning_briefing
-      FROM dashboard_users
-      WHERE active = true
-        AND telegram_id IS NOT NULL
-        AND (
-          behavior_profile->>'morning_briefing' IN ('daily', 'weekdays')
-          OR morning_briefing IN ('daily', 'weekdays')
-        )
-    `
+  const users = await sql`
+    SELECT id, display_name, username, role, team, telegram_id,
+           behavior_profile, top_concerns, morning_briefing
+    FROM dashboard_users
+    WHERE active = true
+      AND telegram_id IS NOT NULL
+      AND (
+        behavior_profile->>'morning_briefing' IN ('daily', 'weekdays')
+        OR morning_briefing IN ('daily', 'weekdays')
+      )
+  `
 
-    const today = new Date()
-    const dayOfWeek = today.getDay() // 0=Sun, 6=Sat
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
 
-    let sent = 0
-    let skipped = 0
-    const errors = []
+  let sent = 0
+  let skipped = 0
+  const errors = []
 
-    for (const user of users) {
-      try {
-        const profile =
-          typeof user.behavior_profile === 'string'
-            ? JSON.parse(user.behavior_profile || '{}')
-            : user.behavior_profile || {}
+  for (const user of users) {
+    try {
+      const profile =
+        typeof user.behavior_profile === 'string'
+          ? JSON.parse(user.behavior_profile || '{}')
+          : user.behavior_profile || {}
 
-        const briefingPref = user.morning_briefing || profile.morning_briefing
-        if (briefingPref === 'weekdays' && isWeekend) {
-          skipped++
-          continue
-        }
-
-        const briefingText = await buildBriefing(sql, user, profile)
-        await sendTelegramMessage(user.telegram_id, briefingText)
-        sent++
-      } catch (err) {
-        errors.push({ user: user.username, error: err.message })
+      const briefingPref = user.morning_briefing || profile.morning_briefing
+      if (briefingPref === 'weekdays' && isWeekend) {
+        skipped++
+        continue
       }
-    }
 
-    return res.status(200).json({ ok: true, sent, skipped, errors })
-  } catch (err) {
-    console.error('Morning briefing cron error:', err)
-    return res.status(500).json({ error: 'Internal server error' })
+      const briefingText = await buildBriefing(sql, user, profile)
+      await sendTelegramMessage(user.telegram_id, briefingText)
+      sent++
+    } catch (err) {
+      errors.push({ user: user.username })
+    }
   }
+
+  return { ok: true, sent, skipped, errors }
 }
 
 async function buildBriefing(sql, user, _profile) {
@@ -118,7 +127,6 @@ async function buildBriefing(sql, user, _profile) {
     `🏖️ On leave: *${onLeave}*`,
   ]
 
-  // Concern-specific extra data
   if (concerns.includes('overdue_tickets') && overdue > 0) {
     const top = isManager
       ? await sql`SELECT i.redmine_id, i.title, u.name AS assignee FROM issues i LEFT JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[])) ORDER BY i.due_date ASC LIMIT 3`
