@@ -1,0 +1,39 @@
+# .opencode/hook/hooks.yaml
+# Loaded by the opencode-yaml-hooks plugin (registered in .opencode/opencode.json).
+#
+# ALL hooks below are NON-BLOCKING (exit 0) by design. They only print reminders
+# and never block tool execution. Do not add `action: stop` here.
+
+hooks:
+  # Remind the agent what to work on at session start.
+  - id: session-start-reminder
+    event: session.created
+    actions:
+      - bash: |
+          echo "=== Next Task ==="
+          node scripts/board.js next 2>/dev/null | sed 's/^/  Task /' || true
+          echo "=== Vault ==="
+          stat -c '%y' .opencode/vault/INDEX.md 2>/dev/null | sed 's/^/  Last updated: /' || echo "  No vault file"
+          echo "=== Git ==="
+          git status --short 2>/dev/null | head -5 | sed 's/^/  /' || true
+
+  # Remind after any file change that board/vault may need updating.
+  - id: file-changed-reminder
+    event: file.changed
+    actions:
+      - bash: "echo '  ↳ board/vault check due after file changes'"
+
+  # Remind when strategy.md or sprint.md changes — verify board reflects new priorities.
+  - id: strategy-sprint-reminder
+    event: file.changed
+    matchAllPaths:
+      - "**/strategy.md"
+      - "**/sprint.md"
+    actions:
+      - bash: "echo '  ↳ strategy/sprint updated — verify board reflects new priorities'"
+
+  # On session idle/stop, nudge to update board + vault if git is dirty.
+  - id: idle-nudge
+    event: session.idle
+    actions:
+      - bash: "node .opencode/hook/idle-nudge.js"
