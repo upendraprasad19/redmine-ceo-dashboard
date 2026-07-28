@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import EscalationChain from './EscalationChain'
 import IntelligenceChat from './IntelligenceChat'
 import OneOnOnePrep from './OneOnOnePrep'
+import PersonProfileModal from './PersonProfileModal'
 import PinnedInsights from './PinnedInsights'
 import ProfilePanel from './ProfilePanel'
 import TeamHealth from './TeamHealth'
@@ -289,189 +290,6 @@ function TeamAccordion({ teamName, count, meta, children }) {
           <div style={{ background: C.surface, padding: '12px 14px' }}>{children}</div>
         </>
       )}
-    </div>
-  )
-}
-
-function PersonModal({ person, onClose }) {
-  if (!person) return null
-  const _workPct = (person.worked / 45) * 100
-  const _timePct = (person.hours / 160) * 100
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 300,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'rgba(3,11,21,0.85)',
-          backdropFilter: 'blur(6px)',
-        }}
-      />
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: 'relative',
-          background: C.surface,
-          border: `1px solid ${C.borderHi}`,
-          borderRadius: 20,
-          padding: '36px 40px',
-          width: 520,
-          maxWidth: '90vw',
-        }}
-      >
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: 20,
-            right: 20,
-            background: 'none',
-            border: 'none',
-            color: C.dimmer,
-            fontSize: 20,
-            cursor: 'pointer',
-          }}
-        >
-          ✕
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 30 }}>
-          <Avatar initials={person.initials} size={58} />
-          <div style={{ flex: 1 }}>
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                color: C.white,
-                fontFamily: "'Barlow Condensed',sans-serif",
-              }}
-            >
-              {person.name}
-            </div>
-            <div style={{ fontSize: 12, color: C.dim, marginTop: 3 }}>
-              {person.role} · {person.team}
-            </div>
-          </div>
-          {person.leave && (
-            <div
-              style={{
-                background: `${C.amber}18`,
-                border: `1px solid ${C.amber}44`,
-                borderRadius: 8,
-                padding: '6px 14px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
-              }}
-            >
-              <Dot color={C.amber} pulse />
-              <span style={{ fontSize: 12, color: C.amber, fontWeight: 600 }}>
-                {person.leave} Leave
-              </span>
-            </div>
-          )}
-        </div>
-        <div
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 28 }}
-        >
-          {[
-            { label: 'Created', val: person.tickets_created || 0, color: C.blueLight },
-            { label: 'Worked', val: person.tickets_worked || 0, color: C.white },
-            { label: 'Hours Logged', val: `${person.hours_this_month || 0}h`, color: C.green },
-          ].map((s) => (
-            <div
-              key={s.label}
-              style={{
-                background: C.bg,
-                border: `1px solid ${C.border}`,
-                borderRadius: 12,
-                padding: '20px 16px',
-                textAlign: 'center',
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "'Barlow Condensed',sans-serif",
-                  fontSize: 34,
-                  fontWeight: 700,
-                  color: s.color,
-                  lineHeight: 1,
-                }}
-              >
-                {s.val}
-              </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: C.dimmer,
-                  marginTop: 7,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Label>Workload Capacity</Label>
-            <span
-              style={{
-                fontSize: 11,
-                color:
-                  (person.tickets_worked || 0) > 40
-                    ? C.red
-                    : (person.tickets_worked || 0) > 30
-                      ? C.amber
-                      : C.green,
-                fontWeight: 600,
-              }}
-            >
-              {(person.tickets_worked || 0) > 40
-                ? 'Overloaded'
-                : (person.tickets_worked || 0) > 30
-                  ? 'Moderate'
-                  : 'Balanced'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Bar
-              pct={((person.tickets_worked || 0) / 45) * 100}
-              color={
-                (person.tickets_worked || 0) > 40
-                  ? C.red
-                  : (person.tickets_worked || 0) > 30
-                    ? C.amber
-                    : C.blue
-              }
-              h={6}
-            />
-            <span style={{ fontSize: 11, color: C.dimmer, flexShrink: 0 }}>
-              {person.tickets_worked || 0} / 45
-            </span>
-          </div>
-        </div>
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Label>Time Logged (Month)</Label>
-            <span style={{ fontSize: 11, color: C.dim }}>
-              {person.hours_this_month || 0}h / 160h
-            </span>
-          </div>
-          <Bar pct={((person.hours_this_month || 0) / 160) * 100} color={C.blue} h={6} />
-        </div>
-      </div>
     </div>
   )
 }
@@ -5555,7 +5373,23 @@ export default function Dashboard({ onLogout, currentUser }) {
   const { overview, people, tickets, timeLogs } = data
 
   const [person, setPerson] = useState(null)
+  const [personProfile, setPersonProfile] = useState(null)
+  const [personProfileLoading, setPersonProfileLoading] = useState(false)
   const [ticket, setTicket] = useState(null)
+
+  const handleSelectPerson = async (m) => {
+    setPerson(m)
+    setPersonProfile(null)
+    setPersonProfileLoading(true)
+    try {
+      const res = await fetch(`/api/people/${m.id}/profile?period=weekly`)
+      if (res.ok) {
+        const data = await res.json()
+        setPersonProfile(data)
+      }
+    } catch {}
+    setPersonProfileLoading(false)
+  }
 
   return (
     <div
@@ -5971,7 +5805,7 @@ export default function Dashboard({ onLogout, currentUser }) {
             <People
               people={people}
               overview={overview}
-              onSelectPerson={setPerson}
+              onSelectPerson={handleSelectPerson}
               onPrepOneOnOne={setOneOnOnePerson}
             />
           )}
@@ -5980,7 +5814,15 @@ export default function Dashboard({ onLogout, currentUser }) {
         </div>
       </div>
 
-      <PersonModal person={person} onClose={() => setPerson(null)} />
+      <PersonProfileModal
+        person={person}
+        profile={personProfile}
+        loading={personProfileLoading}
+        onClose={() => {
+          setPerson(null)
+          setPersonProfile(null)
+        }}
+      />
       <TicketModal ticket={ticket} onClose={() => setTicket(null)} />
       <OneOnOnePrep person={oneOnOnePerson} onClose={() => setOneOnOnePerson(null)} />
       <ProfilePanel open={profileOpen} onClose={() => setProfileOpen(false)} onLogout={onLogout} />
