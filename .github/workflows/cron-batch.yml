@@ -1,0 +1,23 @@
+name: cron-batch
+
+on:
+  schedule:
+    - cron: '0 * * * *'    # every hour at :00 UTC
+  workflow_dispatch: {}      # manual trigger for debugging
+
+concurrency:
+  group: cron-batch
+  cancel-in-progress: true  # kill slow run, start fresh — safer for always-run jobs
+
+jobs:
+  batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Trigger batch endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error \
+            -H "x-cron-secret: $CRON_SECRET" \
+            "https://thinking-code-delivery-ai.vercel.app/api/cron/run?job=batch"

@@ -132,10 +132,14 @@ Each future phase gets its own spec + plan under `docs/superpowers/`.
 
 ## Deploy workflow
 1. Make + verify changes on localhost.
-2. `git commit` then `git push origin master`.
+2. `git commit` then `git push origin main`.
 3. Vercel auto-deploys. If the production target drifts (preview instead of
-   prod), check Vercel → Settings → Git → Production Branch is `master`, or
+   prod), check Vercel → Settings → Git → Production Branch is `main`, or
    promote the preview manually.
+4. Hourly batch crons are dispatched by **GitHub Actions**
+   (`.github/workflows/cron-batch.yml`), not Vercel — Vercel Hobby only allows
+   daily crons. The workflow `curl`s `/api/cron/run?job=batch` with
+   `CRON_SECRET` header.
 
 ## Things not to do
 - Don't create new `sendTelegramMessage` copies — use the lib. (Phase 1's
