@@ -84,15 +84,22 @@ export default async function handler(req, res) {
   // Accept both POST (dashboard button) and GET (Vercel Cron)
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end()
 
-  // Require CRON_SECRET for all calls (Vercel Cron, dashboard button, or manual)
+  // Accept CRON_SECRET header auth (cron jobs, external tools) OR session-cookie
+  // auth (dashboard browser users).
   const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret) {
-    return res.status(501).json({ error: 'CRON_SECRET not configured' })
-  }
   const authHeader = req.headers.authorization || ''
   const bearerToken = authHeader.replace('Bearer ', '')
   const headerSecret = req.headers['x-cron-secret']
-  if (bearerToken !== cronSecret && headerSecret !== cronSecret) {
+  let isAuth = false
+  if (cronSecret && (bearerToken === cronSecret || headerSecret === cronSecret)) {
+    isAuth = true
+  }
+  if (!isAuth) {
+    const { getCurrentUser } = require('../../lib/auth')
+    const user = await getCurrentUser(req)
+    if (user) isAuth = true
+  }
+  if (!isAuth) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 

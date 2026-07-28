@@ -5361,7 +5361,8 @@ export default function Dashboard({ onLogout, currentUser }) {
           setSyncing(false)
         }, 30000)
       } else {
-        alert('Sync failed. Check terminal logs.')
+        const data = await res.json().catch(() => ({}))
+        alert(`Sync failed (${res.status}): ${data.error || 'Unknown error'}`)
         setSyncing(false)
       }
     } catch (_err) {
