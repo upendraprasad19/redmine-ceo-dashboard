@@ -23,7 +23,11 @@ const DIRS = ['backlog', 'active', 'done']
 // --- Helpers ---
 
 function sanitizeSlug(input) {
-  const slug = input.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  const slug = input
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
   if (!slug || slug.length > 60) {
     console.error(`Invalid slug: "${input}" → "${slug}"`)
     process.exit(1)
@@ -118,13 +122,15 @@ Description.
 
 function cmdStart(nnn) {
   const matches = findFileByNumber(nnn)
-  const inBacklog = matches.filter(m => m.dir === 'backlog')
+  const inBacklog = matches.filter((m) => m.dir === 'backlog')
   if (inBacklog.length === 0) {
     console.error(`No backlog file found for ${nnn}`)
     process.exit(1)
   }
   if (inBacklog.length > 1) {
-    console.error(`Multiple backlog files found for ${nnn}: ${inBacklog.map(m => m.file).join(', ')}`)
+    console.error(
+      `Multiple backlog files found for ${nnn}: ${inBacklog.map((m) => m.file).join(', ')}`,
+    )
     process.exit(1)
   }
 
@@ -139,13 +145,15 @@ function cmdStart(nnn) {
 
 function cmdDone(nnn, summary) {
   const matches = findFileByNumber(nnn)
-  const inActive = matches.filter(m => m.dir === 'active')
+  const inActive = matches.filter((m) => m.dir === 'active')
   if (inActive.length === 0) {
     console.error(`No active file found for ${nnn}`)
     process.exit(1)
   }
   if (inActive.length > 1) {
-    console.error(`Multiple active files found for ${nnn}: ${inActive.map(m => m.file).join(', ')}`)
+    console.error(
+      `Multiple active files found for ${nnn}: ${inActive.map((m) => m.file).join(', ')}`,
+    )
     process.exit(1)
   }
 
@@ -164,6 +172,16 @@ function cmdDone(nnn, summary) {
   fs.unlinkSync(src)
 
   console.log(`Moved: active/${inActive[0].file} → done/${inActive[0].file}`)
+
+  // Plan-review record check
+  const slug = inActive[0].file.replace(/\.md$/, '')
+  const reviewPath = path.join(__dirname, '..', 'docs', 'reviews', `${slug}.md`)
+  if (!fs.existsSync(reviewPath)) {
+    console.warn(
+      `  \u26a0\ufe0f  Review record missing: docs/reviews/${slug}.md (recommended for T2 tasks)`,
+    )
+  }
+
   cmdSync()
 }
 
@@ -258,10 +276,11 @@ function cmdSync() {
   const sections = {}
   for (const dir of DIRS) {
     const dirPath = path.join(BOARD_DIR, dir)
-    const files = fs.readdirSync(dirPath)
-      .filter(f => f.endsWith('.md'))
+    const files = fs
+      .readdirSync(dirPath)
+      .filter((f) => f.endsWith('.md'))
       .sort()
-    sections[dir] = files.map(f => {
+    sections[dir] = files.map((f) => {
       const filePath = path.join(dirPath, f)
       const heading = extractHeading(filePath)
       const slug = f.replace(/\.md$/, '')
@@ -358,7 +377,7 @@ async function main() {
   }
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('board.js failed:', err.message)
   process.exit(1)
 })

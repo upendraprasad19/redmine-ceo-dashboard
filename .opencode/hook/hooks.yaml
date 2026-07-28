@@ -22,6 +22,7 @@ hooks:
             echo "$staged" | sed 's/^/  /'
             echo "  → Present diff to user before committing"
           fi
+      - bash: "node scripts/discipline-reminder.js"
 
   # Remind after any file change that board/vault may need updating.
   - id: file-changed-reminder

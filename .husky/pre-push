@@ -1,1 +1,6 @@
-npm run test:unit && node scripts/board.js validate && npm run build
+TIER=$(node scripts/blast-radius.js)
+if [ "$TIER" = "feature" ]; then
+  echo "blast-radius=feature — skipping local gates; CI is backstop."
+  exit 0
+fi
+npm run test:unit && node scripts/board.js validate && npm run build && node scripts/review-diff.js

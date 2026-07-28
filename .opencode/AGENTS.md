@@ -70,13 +70,14 @@ not every change needs the full ceremony. Use the tier table to right-size the p
    - Update `vault/INDEX.md`
 4. **Dev server check**: if `npm run dev` is not running, start it (`Start-Process cmd /c "npm run dev" -WindowStyle Hidden`) and wait 8s; open http://localhost:3000 to verify no page crash
 
-### D. Pre-commit quality gates (BEFORE push to master)
+### D. Pre-commit quality gates (BEFORE push to main)
 1. **All tests pass**: `npm run test:unit` (and `npm run test:e2e:smoke` if e2e infra available)
 2. **Build check**: `npm run build` — must succeed (or `npx next build` if build script exists)
 3. **Self-learning**: run `skill self-learning` after the batch
 4. **DB drift check** (see section below)
 5. **Code review**: Present diff summary (files changed, lines added/removed, full diff) to the user. Do NOT commit until user explicitly approves.
 6. **Vault + board are current**: INDEX.md files reflect all work done
+7. **Discipline gates**: Pre-commit runs deferral-euphemism gate (`check-no-deferral.js`) + audit-closure validator (`validate-audit-closure.js`). Pre-push runs blast-radius tiering (`blast-radius.js`) and skips full suite for feature-only changes.
 
 ---
 
@@ -137,7 +138,7 @@ Next.js (pages router) dashboard that pulls Redmine data into a Neon Postgres DB
 
 - **Data sources**: Redmine REST API (source of truth), Neon (local cache), Upstash Redis (volatile state), Telegram (bot + notifications), SMTP via Nodemailer (`lib/email.js`), OpenRouter via `lib/ai.js`.
 - **Auth**: JWT session cookie (`ceo_session`), bcrypt password hashes in `dashboard_users.password_hash`. See `lib/auth.js`.
-- **Production branch**: `master`. Push to master → Vercel auto-deploys.
+- **Production branch**: `main`. Push to main → Vercel auto-deploys.
 
 ## Company domain rule (IMPORTANT)
 The company domain is **`thinkingcode.com`** (no hyphen). Redmine stores the old `thinking-code.com` / `mail.thinking-code.com` form.

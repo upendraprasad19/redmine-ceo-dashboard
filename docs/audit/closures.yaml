@@ -1,0 +1,4 @@
+# Audit closure ledger — each batch records per-item terminal state.
+# Schema: { batch: string, items: [{ id, description, terminal_state, commit? }] }
+# Terminal states: closed_in_commit | upstream_blocked | verified_clean
+batches: []

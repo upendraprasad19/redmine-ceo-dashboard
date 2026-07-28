@@ -5,6 +5,8 @@ if git diff --cached --name-only | grep -qE 'scripts/sync-|pages/api/sync|pages/
 then
   node scripts/check-drift.js --warn || true
 fi
+node scripts/check-no-deferral.js || true
+node scripts/validate-audit-closure.js --warn || true
 staged=$(git diff --cached --stat 2>/dev/null)
 if [ -n "$staged" ]; then
   echo "=== Staged Changes ==="
