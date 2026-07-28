@@ -12,6 +12,9 @@ const { getDb } = require('../lib/db')
 const fs = require('fs')
 const path = require('path')
 
+const args = process.argv.slice(2)
+const warnOnly = args.includes('--warn')
+
 async function checkDrift() {
   const contractPath = path.join(__dirname, '..', 'schema', 'contract.sql')
   if (!fs.existsSync(contractPath)) {
@@ -20,7 +23,17 @@ async function checkDrift() {
   }
 
   const contract = fs.readFileSync(contractPath, 'utf8')
-  const sql = getDb()
+  let sql
+  try {
+    sql = getDb()
+  } catch (err) {
+    if (warnOnly) {
+      console.warn('Drift check skipped: DB unavailable')
+      process.exit(0)
+    }
+    console.error('Drift check failed:', err.message)
+    process.exit(1)
+  }
 
   const expectedTables = []
   const tableRegex = /CREATE TABLE (\w+) \(/g
@@ -105,6 +118,10 @@ async function checkDrift() {
 }
 
 checkDrift().catch((err) => {
+  if (warnOnly) {
+    console.warn('Drift check skipped:', err.message)
+    process.exit(0)
+  }
   console.error('Drift check failed:', err.message)
   process.exit(1)
 })

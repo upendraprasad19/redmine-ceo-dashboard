@@ -1,3 +1,13 @@
 npx lint-staged
 gitleaks protect --staged --no-banner
 node scripts/board.js validate --warn 2>/dev/null || echo "Board: INDEX.md may be stale"
+if git diff --cached --name-only | grep -qE 'scripts/sync-|pages/api/sync|pages/api/tickets|crons/health-check|lib/table-audit'
+then
+  node scripts/check-drift.js --warn || true
+fi
+staged=$(git diff --cached --stat 2>/dev/null)
+if [ -n "$staged" ]; then
+  echo "=== Staged Changes ==="
+  echo "$staged" | sed 's/^/  /'
+  echo "  → Present diff to user before committing"
+fi

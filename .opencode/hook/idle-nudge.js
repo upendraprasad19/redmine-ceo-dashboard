@@ -11,6 +11,7 @@ const { execSync } = require('child_process')
 const BOARD_DIR = path.join(__dirname, '..', 'board')
 const VAULT_INDEX = path.join(__dirname, '..', '..', 'vault', 'INDEX.md')
 const DONE_DIR = path.join(BOARD_DIR, 'done')
+const LAST_RETRO = path.join(BOARD_DIR, '.last-retro')
 
 function vaultDaysOld() {
   try {
@@ -39,6 +40,17 @@ function doneTasksSinceVaultUpdate() {
   }
 }
 
+function retroDoneSinceVaultUpdate() {
+  try {
+    if (!fs.existsSync(LAST_RETRO)) return false
+    const retroMtime = fs.statSync(LAST_RETRO).mtimeMs
+    const vaultMtime = fs.statSync(VAULT_INDEX).mtimeMs
+    return retroMtime > vaultMtime
+  } catch (_) {
+    return false
+  }
+}
+
 function runIdleNudge() {
   // ── Board sync + validate (when git is dirty) ──────────
   try {
@@ -63,6 +75,12 @@ function runIdleNudge() {
   const doneSince = doneTasksSinceVaultUpdate()
   if (doneSince >= 5) {
     console.log(`SELF-LEARNING DUE: ${doneSince} done tasks since last vault update — run skill self-learning`)
+  }
+
+  // ── Retro reminder ──────────────────────────────────────
+  if (doneSince >= 5 && !retroDoneSinceVaultUpdate()) {
+    console.log(`RETRO DUE: ${doneSince} done tasks since last vault update — run retro per board/RETRO.md`)
+    console.log('  (After retro, run: touch .opencode/board/.last-retro)')
   }
 }
 

@@ -16,6 +16,12 @@ hooks:
           stat -c '%y' .opencode/vault/INDEX.md 2>/dev/null | sed 's/^/  Last updated: /' || echo "  No vault file"
           echo "=== Git ==="
           git status --short 2>/dev/null | head -5 | sed 's/^/  /' || true
+          staged=$(git diff --cached --stat 2>/dev/null)
+          if [ -n "$staged" ]; then
+            echo "=== Staged ==="
+            echo "$staged" | sed 's/^/  /'
+            echo "  → Present diff to user before committing"
+          fi
 
   # Remind after any file change that board/vault may need updating.
   - id: file-changed-reminder
