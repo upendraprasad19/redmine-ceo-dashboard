@@ -48,7 +48,7 @@ export default function LoginPage() {
         setPassword('')
       }
     } catch {
-      setError('Network error. Please try again.')
+      setError('Server error. Please try again or contact admin.')
     } finally {
       setLoading(false)
     }

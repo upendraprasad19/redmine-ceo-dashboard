@@ -11,15 +11,23 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Username and password required' })
   }
 
-  // Rate limit: 10 attempts per minute per IP
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
-  const { allowed, retryAfter } = await checkRateLimit(`ratelimit:login:${ip}`, {
-    windowSec: 60,
-    max: 10,
-  })
-  if (!allowed) {
-    res.setHeader('Retry-After', String(retryAfter))
-    return res.status(429).json({ error: 'Too many login attempts. Please try again later.' })
+  // Rate limit: 10 attempts per minute per IP — fail-open if Redis is down
+  let ip = 'unknown'
+  try {
+    ip =
+      req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      'unknown'
+    const { allowed, retryAfter } = await checkRateLimit(`ratelimit:login:${ip}`, {
+      windowSec: 60,
+      max: 10,
+    })
+    if (!allowed) {
+      res.setHeader('Retry-After', String(retryAfter))
+      return res.status(429).json({ error: 'Too many login attempts. Please try again later.' })
+    }
+  } catch (rlErr) {
+    console.warn('Login error: Rate-limit check failed (Redis down?):', rlErr.message)
   }
 
   try {
