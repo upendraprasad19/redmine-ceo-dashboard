@@ -16,6 +16,8 @@
 - [[github-actions-cron-dispatch]] — Move hourly crons from Vercel Hobby to GitHub Actions
 
 ## Gotchas
+- [[opencode-gitignore-force-add]] — .opencode/ is gitignored; need git add -f for tracked files
+- [[gate-self-referential-doc]] — Gates that ban words catch their own documentation
 - [[delivery-owner-enum-vs-userid]] — Delivery Owner is an ENUM field, not a User field
 - [[hardcoded-redmine-url]] — Hardcoded wrong Redmine URL in ticket links
 - [[sync-status-map-duplication]] — Status map duplicated in 4 files, can drift apart
@@ -43,3 +45,37 @@
 
 ## Process (Jul 2026)
 - [[discipline-gates]] — Pre-commit/pre-push gate system (deferral gate, blast-radius, audit closure, plan-review records)
+
+## Audit Patterns (Jul 2026 audit)
+- [[audit-infrastructure]] — docs/audit/ with AUDIT_PLAYBOOK.md, LENS_REGISTRY.md, SoT schema, closure templates
+- [[audit-gate-scripts]] — 10 automated gate scripts enforced via npm run audit:gates
+- [[audit-sot-registry]] — SoT YAML registry for 8 core tables with writer/reader contracts
+- [[audit-lenses-14]] — 14 canonical audit lenses covering Security, Data Integrity, Code Quality, Tests, Infrastructure
+- [[no-deferral-audit-closures]] — Every finding must reach terminal state, no deferrals allowed
+- [[audit-severity-framework]] — P0-P3 severity classification with clear action thresholds
+- [[sot-writer-reader-contract]] — SoT YAML documents writer/reader contracts per table
+- [[lens-based-audit-execution]] — Decompose audit into 14 canonical lenses with checklists
+- [[gate-scripts-as-static-analysis]] — 10 gate scripts as lightweight static analysis layer
+
+## Audit Gotchas (Jul 2026 audit)
+- [[slack-tdz-bug]] — Slack events.js TDZ bug bypasses signature verification (AUD-001)
+- [[missing-normalize-email-sync]] — pages/api/sync.js missing normalizeEmail() call (AUD-002)
+- [[no-trycatch-auth-endpoints]] — 6 auth endpoints missing try/catch (AUD-003)
+- [[no-e2e-tests]] — tests/e2e/ directory empty despite Playwright installed (AUD-004)
+- [[morning-briefing-no-whitelist]] — Morning briefing "no time log" count missing engineering whitelist (AUD-005)
+- [[constant-drift-12-files]] — APPROVED_PROJECT_IDS duplicated in 12 files, gate only checks 4 (AUD-009/020)
+- [[status-priority-map-drift]] — statusMap and priorityMap duplicated in 4 files each (AUD-006/007)
+- [[send500-bypass-6-routes]] — 6 API routes use inline res.status(500) instead of send500 (AUD-010)
+- [[cjs-in-esm-pages]] — 22 pages/api/ files use CJS require instead of ESM import (AUD-023)
+- [[check-module-system-regex-bug]] — check-module-system.js regex logic error may miss violations (AUD-025)
+- [[password-reset-rate-limit-gap]] — Forgot-password flow has no rate limiting (AUD-011)
+- [[username-enumeration-via-response-shape]] — forgot-password channels leaks user existence (AUD-018)
+- [[schema-contract-stale-after-migration]] — Schema contract has tables that migration 023 drops (AUD-027)
+- [[gate-script-coverage-gap]] — Gate scripts can have coverage gaps (AUD-020)
+- [[latent-sql-interpolation-in-unused-variable]] — Dead code with SQL injection risk (AUD-028)
+- [[err-message-leak-in-cron-batch-response]] — err.message exposed in cron batch response (AUD-015)
+
+## Audit Optimizations (Jul 2026 audit)
+- [[audit-cadence-structure]] — Three audit cadences: per-batch, quarterly, pre-deploy
+- [[audit-findings-to-vault-auto-crossref]] — Findings cross-reference vault entries, creating closed loop
+- [[sot-registry-auto-generation]] — SoT registry auto-generated from codebase analysis
