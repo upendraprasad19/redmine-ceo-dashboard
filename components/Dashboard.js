@@ -1857,7 +1857,8 @@ function Tickets({ tickets = [], onSelectTicket }) {
   function sortHeader(label, proj) {
     const colKey = label === 'Created date' ? 'created' : label === 'Due Date' ? 'due' : null
     const cur = proj ? sortState[proj] || {} : {}
-    const active = colKey && cur.by === colKey
+    const isDefault = !cur.by && colKey === 'created'
+    const active = colKey && (cur.by === colKey || isDefault)
     return (
       <div
         key={label}
@@ -1876,7 +1877,7 @@ function Tickets({ tickets = [], onSelectTicket }) {
         }}
       >
         {label}
-        {active && (cur.dir === 'asc' ? '↑' : '↓')}
+        {active && ((isDefault ? 'desc' : cur.dir) === 'asc' ? '↑' : '↓')}
         {!active && colKey && proj ? '↕' : null}
       </div>
     )
@@ -2117,7 +2118,9 @@ function Tickets({ tickets = [], onSelectTicket }) {
           .map(([proj, tix]) => {
             const od = tix.filter((t) => t.overdue).length
             const s = sortState[proj] || {}
-            const groupTix = s.by ? sortGroup(tix, s) : tix
+            const groupTix = s.by
+              ? sortGroup(tix, s)
+              : sortGroup(tix, { by: 'created', dir: 'desc' })
             return (
               <TeamAccordion
                 key={proj}
