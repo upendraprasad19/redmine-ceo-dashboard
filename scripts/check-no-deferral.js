@@ -21,8 +21,8 @@ const BANNED = [
   /\bcan\s+be\s+folded\s+into\b/i,
 ]
 
-// Exclusion: lines describing the gate itself (documentation, not deferrals)
-const EXCLUDE = /gate|check-no-deferral|deferral-euphemism|deferral gate/i
+// Exclusion: lines describing the gate itself, or vault wikilinks referencing deferral policy
+const EXCLUDE = /gate|check-no-deferral|deferral-euphemism|deferral gate|\[\[.*defer/i
 
 function getStagedMdFiles() {
   try {
