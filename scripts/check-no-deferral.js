@@ -21,6 +21,9 @@ const BANNED = [
   /\bcan\s+be\s+folded\s+into\b/i,
 ]
 
+// Exclusion: lines describing the gate itself (documentation, not deferrals)
+const EXCLUDE = /gate|check-no-deferral|deferral-euphemism|deferral gate/i
+
 function getStagedMdFiles() {
   try {
     const output = execSync('git diff --cached --name-only --diff-filter=ACM', { encoding: 'utf8' })
@@ -57,6 +60,8 @@ function checkFile(file) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+    // Skip lines documenting the gate itself (feature name, not deferral action)
+    if (EXCLUDE.test(line)) continue
     for (const pattern of BANNED) {
       if (pattern.test(line)) {
         violations.push({
