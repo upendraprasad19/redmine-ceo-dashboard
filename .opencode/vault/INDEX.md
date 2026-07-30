@@ -39,6 +39,7 @@
 - [[protocol-is-advisory-until-enforced]] — Documentation protocols fail; need automated hooks to enforce discipline
 - [[performance-snapshots-fk-wrong-table]] — performance_snapshots FK pointed at dashboard_users(id) instead of users(id), scoring 0 users
 - [[distinct-on-non-deterministic-multiple-periods]] — DISTINCT ON + ORDER BY snapshot_date non-deterministic when multiple periods share same date
+- [[ci-shallow-clone-fetch-depth]] — GitHub Actions shallow clone breaks git log checks; set fetch-depth:0
 
 ## Tags
 - See `tags/INDEX.md` for tag index.
