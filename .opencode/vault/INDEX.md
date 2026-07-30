@@ -52,7 +52,7 @@
 - New entries use `templates/memory-note.md`
 
 ## Process (Jul 2026)
-- [[discipline-gates]] — Pre-commit/pre-push gate system (deferral gate, blast-radius, audit closure, plan-review records)
+- [[discipline-gates]] — Pre-commit/pre-push gate system + enforcement plugin (blocking gates, audit logging, sentinel-based bootstrap detection)
 
 ## Audit Patterns (Jul 2026 audit)
 - [[audit-infrastructure]] — docs/audit/ with AUDIT_PLAYBOOK.md, LENS_REGISTRY.md, SoT schema, closure templates

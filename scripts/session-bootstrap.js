@@ -72,3 +72,11 @@ console.log('   □ Pre-commit: build, self-learning, code review')
 
 console.log('')
 console.log('═══════════════════════════════════════')
+
+// Write sentinel file for session-start gate (discipline-enforcement plugin)
+try {
+  const sentinelPath = require('path').join(__dirname, '..', '.opencode', '.bootstrap-done')
+  require('fs').writeFileSync(sentinelPath, new Date().toISOString())
+} catch {
+  // silent — sentinel write is best-effort
+}

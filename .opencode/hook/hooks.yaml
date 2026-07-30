@@ -39,8 +39,23 @@ hooks:
     actions:
       - bash: "echo '  ↳ strategy/sprint updated — verify board reflects new priorities'"
 
-  # On session idle/stop, nudge to update board + vault if git is dirty.
-  - id: idle-nudge
+  # Post-edit test reminder — remind to run tests after code file changes.
+  - id: post-edit-reminder
+    event: file.changed
+    matchAllPaths:
+      - "**/*.js"
+      - "**/*.ts"
+      - "**/*.jsx"
+      - "**/*.tsx"
+    actions:
+      - bash: "echo '  ↳ File edited — run `npm run test:unit` to verify'"
+      - bash: "echo '  ↳ Update board/vault if this edit closed a task or revealed a pattern'"
+
+  # Self-learning reminder — check if tasks were completed in recent commits.
+  - id: self-learning-reminder
     event: session.idle
     actions:
-      - bash: "node .opencode/hook/idle-nudge.js"
+      - bash: |
+          if git diff --name-only HEAD~1..HEAD 2>/dev/null | Select-String -Pattern "board/done/" -Quiet; then
+            echo "  ↳ Board tasks completed — run `skill self-learning`"
+          fi

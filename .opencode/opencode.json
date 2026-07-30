@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "opencode-yaml-hooks",
+    ".opencode/plugins/discipline-enforcement.js"
+  ],
+  "instructions": [".opencode/AGENTS.md"],
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
+      }
+    },
+    "reviewer": {
+      "description": "Reviews a diff for architecture, security, and schema-convention violations before it's considered done",
+      "mode": "subagent",
+      "prompt": "You are a strict code reviewer for this project. Check the diff against .opencode/AGENTS.md sections on architecture, secrets/security, and coding standards. Flag any violation explicitly. Do not approve silently — list every issue found, or state clearly that none were found.",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    }
+  }
+}

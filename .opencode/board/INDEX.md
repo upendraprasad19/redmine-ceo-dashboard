@@ -1,7 +1,7 @@
 # Task Board — Redmine CEO Dashboard
 
 ## Active
-_No active tasks._
+- [aud-029-unit-tests](active/033-aud-029-unit-tests.md) — Add unit tests for 8 lib/ modules: db, admin, redis, rate-limit, table-audit, gpt-executor, ai, chat-enrichment
 
 ## Backlog
 _No backlog tasks._
@@ -34,9 +34,11 @@ _No backlog tasks._
 - [default-tickets-sort](done/026-default-tickets-sort.md) — Default sort tickets by created date descending (latest first)
 - [audit-fix-execution](done/027-audit-fix-execution.md) — Execute audit fix plan: P0+P1+P2 fixes across 23 files
 - [rate-limiting-batch-d](done/028-rate-limiting-batch-d.md) — Add rate limiting to password reset, chat, and sync endpoints (AUD-011/012/013)
-- [performance-users-id-migration](done/029-performance-users-id-migration.md) — Switch performance_snapshots.user_id from dashboard_users(id) to users(id) to unblock PM Pulse metrics for all team members
+- [performance-users-id-migration](done/029-performance-users-id-migration.md) — Switch performance_snapshots.user_id from dashboard_users(id) to users(id)
 - [board-utils-sentinel-fix](done/030-board-utils-sentinel-fix.md) — Fix board-utils sentinel parsing to use ISO content instead of mtime, fix flaky tests
 - [retro-trigger-enforcement](done/031-retro-trigger-enforcement.md) — Add retro check to board.js done, new retro/retro-mark commands, shared board-utils.js helper
+- [discipline-enforcement-plugin](done/032-discipline-enforcement-plugin.md) — Machine-enforced discipline gates via opencode plugin (session-start gate, plan-first gate, post-edit test gate, auto self-learning, compliance report)
+- [performance-periods](done/034-performance-periods.md) — Fix PM Pulse weekly/monthly views — cron now stores all 3 periods, fix matcher + gpt-executor to use daily for deterministic scoring
 
 ## Board protocol
 - **Creating a task**: `node scripts/board.js create "slug" "Description"`

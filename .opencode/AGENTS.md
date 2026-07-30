@@ -30,6 +30,7 @@ not every change needs the full ceremony. Use the tier table to right-size the p
 **T1 self-review checklist** (substitute for the reviewer subagent):
 - Conventions match neighbours (module system, naming, snake_case).
 - No secrets logged, no auth bypass, no raw SQL injection surface.
+- Trace user click path through all UI states affected by the change.
 - One-line done note added to `board/` after.
 
 **Full T2 protocol (the original chain):**
@@ -131,6 +132,8 @@ When a user asks "what did we do", respond with:
 1. Board status (active/done/backlog)
 2. Test results (last run)
 3. Vault updates since last session
+4. **Discipline gate status**: bootstrap passed/failed, plan gate active, blocked action count
+5. **Compliance report**: whether session-start and plan-first gates were enforced in this session
 
 ---
 
