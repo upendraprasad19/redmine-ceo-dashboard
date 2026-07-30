@@ -1,6 +1,7 @@
 npx lint-staged
 gitleaks protect --staged --no-banner
 node scripts/board.js validate --warn 2>/dev/null || echo "Board: INDEX.md may be stale"
+node scripts/check-discipline.js --warn 2>/dev/null || true
 if git diff --cached --name-only | grep -qE 'scripts/sync-|pages/api/sync|pages/api/tickets|crons/health-check|lib/table-audit'
 then
   node scripts/check-drift.js --warn || true

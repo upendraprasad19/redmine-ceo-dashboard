@@ -22,6 +22,8 @@
     "format:check": "biome format --check .",
     "board": "node scripts/board.js",
     "audit:gates": "node scripts/check-api-auth-required.js && node scripts/check-email-normalization.js && node scripts/check-engineering-filter.js && node scripts/check-approved-projects-sync.js && node scripts/check-error-sanitization.js && node scripts/check-audit-readers-writers.js && node scripts/check-module-system.js && node scripts/check-regression-tests.js && node scripts/check-constant-drift.js && node scripts/check-secrets-not-committed.js",
+    "bootstrap": "node scripts/session-bootstrap.js",
+    "discipline": "node scripts/check-discipline.js",
     "prepare": "husky"
   },
   "dependencies": {
