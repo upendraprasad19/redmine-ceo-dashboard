@@ -14,6 +14,7 @@
 - [[rationalization-defense]] — Defense tables against excuse-generation for "Don't" rules
 - [[dual-auth-api]] — Dual-auth pattern: server secret header OR session cookie for API routes
 - [[github-actions-cron-dispatch]] — Move hourly crons from Vercel Hobby to GitHub Actions
+- [[constants-extraction-pattern]] — Extract duplicated constants to lib/constants.js as single source of truth
 
 ## Gotchas
 - [[opencode-gitignore-force-add]] — .opencode/ is gitignored; need git add -f for tracked files
@@ -30,6 +31,7 @@
 - [[health-check-broken-column-ref]] — health-check.js used wrong column name redmine_project_id vs redmine_id
 - [[orphan-tables-confirmed]] — 9 orphan tables confirmed safe to drop; password_reset_tokens is NOT orphan
 - [[unhandled-async-before-trycatch]] — Unhandled async error before try/catch returns HTML 500, breaks client JSON parsing
+- [[discipline-protocol-not-followed]] — Task-focused mindset overrides protocol; need visible checklist in every session
 
 ## Tags
 - See `tags/INDEX.md` for tag index.
