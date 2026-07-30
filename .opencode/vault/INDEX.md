@@ -17,6 +17,7 @@
 - [[constants-extraction-pattern]] — Extract duplicated constants to lib/constants.js as single source of truth
 - [[sentinel-iso-parsing]] — Parse sentinel file ISO content instead of using filesystem mtime
 - [[multi-period-cron-with-deterministic-consumers]] — Cron stores daily/weekly/monthly; consumers pin to daily for deterministic scoring
+- [[cjs-mocking-vitest]] — CJS module mocking patterns for vitest 1.6.1 (vi.mock broken, use require-first-then-spy)
 
 ## Gotchas
 - [[opencode-gitignore-force-add]] — .opencode/ is gitignored; need git add -f for tracked files

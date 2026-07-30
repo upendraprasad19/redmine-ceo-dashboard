@@ -5,7 +5,10 @@ module.exports = {
     environment: 'node',
     globals: false,
     testTimeout: 10000,
-    pool: 'threads',
+    // SAFETY: 'forks' gives process-level isolation required for require.cache
+    // manipulation in tests (e.g., redis.test.js, rate-limit.test.js). Do NOT
+    // change to 'threads' — it leaks cache mutations across test files.
+    pool: 'forks',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

@@ -1,7 +1,7 @@
 # Task Board — Redmine CEO Dashboard
 
 ## Active
-- [aud-029-unit-tests](active/033-aud-029-unit-tests.md) — Add unit tests for 8 lib/ modules: db, admin, redis, rate-limit, table-audit, gpt-executor, ai, chat-enrichment
+_No active tasks._
 
 ## Backlog
 _No backlog tasks._
@@ -38,6 +38,7 @@ _No backlog tasks._
 - [board-utils-sentinel-fix](done/030-board-utils-sentinel-fix.md) — Fix board-utils sentinel parsing to use ISO content instead of mtime, fix flaky tests
 - [retro-trigger-enforcement](done/031-retro-trigger-enforcement.md) — Add retro check to board.js done, new retro/retro-mark commands, shared board-utils.js helper
 - [discipline-enforcement-plugin](done/032-discipline-enforcement-plugin.md) — Machine-enforced discipline gates via opencode plugin (session-start gate, plan-first gate, post-edit test gate, auto self-learning, compliance report)
+- [aud-029-unit-tests](done/033-aud-029-unit-tests.md) — Add unit tests for 8 lib/ modules: db, admin, redis, rate-limit, table-audit, gpt-executor, ai, chat-enrichment
 - [performance-periods](done/034-performance-periods.md) — Fix PM Pulse weekly/monthly views — cron now stores all 3 periods, fix matcher + gpt-executor to use daily for deterministic scoring
 
 ## Board protocol
