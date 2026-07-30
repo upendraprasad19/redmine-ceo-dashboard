@@ -27,7 +27,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^0.9.5",
     "@react-three/drei": "^9.122.0",
-    "@react-three/fiber": "^8.17.14",
+    "@react-three/fiber": "^9.6.1",
     "@slack/bolt": "^4.6.0",
     "@upstash/redis": "^1.34.0",
     "bcryptjs": "^2.4.3",
