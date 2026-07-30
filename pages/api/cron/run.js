@@ -34,10 +34,19 @@ export const BATCH_SCHEDULE = [
   { hour: 22, jobs: ['capacity'] },
 ]
 
-const ALWAYS_RUN = ['intimation-followup', 'commitment-followup', 'chat-enrichment', 'reminder-delivery']
+const ALWAYS_RUN = [
+  'intimation-followup',
+  'commitment-followup',
+  'chat-enrichment',
+  'reminder-delivery',
+]
 
 const ESM_CRONS = new Set([
-  'morning-briefing', 'missing-log-reminder', 'friday-summary', 'learning-layer', 'reminder-delivery',
+  'morning-briefing',
+  'missing-log-reminder',
+  'friday-summary',
+  'learning-layer',
+  'reminder-delivery',
 ])
 
 const JOB_MAP = {
@@ -85,7 +94,9 @@ export default async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) return res.status(500).json({ error: 'CRON_SECRET not configured' })
 
-  const bearerToken = req.headers.authorization ? req.headers.authorization.replace('Bearer ', '') : null
+  const bearerToken = req.headers.authorization
+    ? req.headers.authorization.replace('Bearer ', '')
+    : null
   const headerSecret = req.headers['x-cron-secret']
   if (bearerToken !== cronSecret && headerSecret !== cronSecret) {
     return res.status(401).json({ error: 'Unauthorized' })
@@ -144,10 +155,18 @@ async function handleBatch(res) {
 
   const allJobs = [...scheduledJobs]
   if (allJobs.length === 0) {
-    return res.status(200).json({ ok: true, hour: currentHour, day: currentDay, executed: [], message: 'No jobs scheduled' })
+    return res.status(200).json({
+      ok: true,
+      hour: currentHour,
+      day: currentDay,
+      executed: [],
+      message: 'No jobs scheduled',
+    })
   }
 
-  console.log(`[BATCH] Hour ${currentHour}, day ${currentDay} — running ${allJobs.length} jobs: ${allJobs.join(', ')}`)
+  console.log(
+    `[BATCH] Hour ${currentHour}, day ${currentDay} — running ${allJobs.length} jobs: ${allJobs.join(', ')}`,
+  )
 
   const results = []
   const startTime = Date.now()
@@ -161,12 +180,15 @@ async function handleBatch(res) {
       const result = await execJob(job)
       results.push({ job, status: 'ok', duration: Date.now() - jobStart, result })
     } catch (err) {
-      results.push({ job, status: 'error', duration: Date.now() - jobStart, error: err.message })
+      console.error(`[BATCH] Job ${job} failed:`, err)
+      results.push({ job, status: 'error', duration: Date.now() - jobStart, error: 'Job failed' })
     }
   }
 
   const totalDuration = Date.now() - startTime
-  console.log(`[BATCH] Completed in ${totalDuration}ms — ${results.filter((r) => r.status === 'ok').length} ok, ${results.filter((r) => r.status === 'error').length} errors, ${results.filter((r) => r.status === 'skipped').length} skipped`)
+  console.log(
+    `[BATCH] Completed in ${totalDuration}ms — ${results.filter((r) => r.status === 'ok').length} ok, ${results.filter((r) => r.status === 'error').length} errors, ${results.filter((r) => r.status === 'skipped').length} skipped`,
+  )
 
   return res.status(200).json({
     ok: true,

@@ -12,37 +12,14 @@ import { config } from 'dotenv'
 config({ path: '.env.local' })
 
 import { neon } from '@neondatabase/serverless'
+import constants from '../lib/constants.js'
 
 const sql = neon(process.env.DATABASE_URL)
 const REDMINE_URL = process.env.REDMINE_URL.replace(/\/$/, '')
 const REDMINE_KEY = process.env.REDMINE_API_KEY
 const START_DATE = '2025-10-01'
 
-const APPROVED_PROJECT_IDS = new Set([
-  2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
-  61, 62, 63, 65, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
-])
-
-const statusMap = {
-  New: 'New',
-  'In Progress': 'In Progress',
-  'Re Open': 'Re Open',
-  Open: 'Open',
-  'Code Review': 'Review',
-  Feedback: 'Closed',
-  Blocked: 'Blocked',
-  Resolved: 'Closed',
-  Closed: 'Closed',
-  Verified: 'Closed',
-  Rejected: 'Closed',
-}
-const priorityMap = {
-  Low: 'Low',
-  Normal: 'Medium',
-  High: 'High',
-  Urgent: 'Critical',
-  Immediate: 'Critical',
-}
+const { STATUS_MAP, PRIORITY_MAP, APPROVED_PROJECT_IDS } = constants
 
 // Delivery Owner enumeration (custom field id=25) — values are enum IDs, not user IDs
 const deliveryOwnerEnumToNeonId = new Map()
@@ -111,9 +88,9 @@ async function getNeonUserId(u) {
         .toUpperCase()
     : 'XX'
   const res = await sql`
-    INSERT INTO users (redmine_id, name, initials, active)
-    VALUES (${u.id}, ${u.name || 'Unknown'}, ${initials}, true)
-    ON CONFLICT (redmine_id) DO UPDATE SET name = EXCLUDED.name
+    INSERT INTO users (redmine_id, name, email, initials, active)
+    VALUES (${u.id}, ${u.name || 'Unknown'}, ${u.mail || null}, ${initials}, true)
+    ON CONFLICT (redmine_id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email
     RETURNING id
   `
   userCache.set(u.id, res[0].id)
@@ -159,8 +136,8 @@ async function backfillProject(redmineProjectId, projectName) {
       chunk.map(async (issue) => {
         const assigneeId = await getNeonUserId(issue.assigned_to)
         const authorId = await getNeonUserId(issue.author)
-        const status = statusMap[issue.status?.name] || issue.status?.name || 'New'
-        const priority = priorityMap[issue.priority?.name] || 'Medium'
+        const status = STATUS_MAP[issue.status?.name] || issue.status?.name || 'New'
+        const priority = PRIORITY_MAP[issue.priority?.name] || 'Medium'
         const bzField = issue.custom_fields?.find((cf) => cf.id === 9)
         const bzId = bzField ? String(bzField.value) : null
 

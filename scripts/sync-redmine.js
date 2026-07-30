@@ -9,9 +9,11 @@ import { config } from 'dotenv'
 config({ path: '.env.local' })
 
 import { neon } from '@neondatabase/serverless'
+import constants from '../lib/constants.js'
 import emailUtils from '../lib/email-utils.js'
 
 const { normalizeEmail } = emailUtils
+const { STATUS_MAP, PRIORITY_MAP, APPROVED_PROJECT_IDS } = constants
 
 const sql = neon(process.env.DATABASE_URL)
 
@@ -112,12 +114,6 @@ async function syncUsers() {
   }
 }
 
-// Approved project IDs (from AppScript)
-const APPROVED_PROJECT_IDS = new Set([
-  2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
-  61, 62, 63, 65, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
-])
-
 // Built at sync start: maps Delivery Owner enum value (as string) → Neon user id
 // (Delivery Owner, custom field id 25, is an enumeration field — NOT a User field —
 // so its values are internal enum IDs specific to this field, not Redmine user IDs.)
@@ -176,27 +172,6 @@ async function syncIssues(sinceDate) {
     return
   }
 
-  const statusMap = {
-    New: 'New',
-    'In Progress': 'In Progress',
-    'Re Open': 'Re Open',
-    Open: 'Open',
-    'Code Review': 'Review',
-    Feedback: 'Closed',
-    Blocked: 'Blocked',
-    Resolved: 'Closed',
-    Closed: 'Closed',
-    Verified: 'Closed',
-    Rejected: 'Closed',
-  }
-  const priorityMap = {
-    Low: 'Low',
-    Normal: 'Medium',
-    High: 'High',
-    Urgent: 'Critical',
-    Immediate: 'Critical',
-  }
-
   console.log(`\n⏳ Upserting ${filtered.length} issues...`)
   const chunkSize = 20
   for (let i = 0; i < filtered.length; i += chunkSize) {
@@ -206,8 +181,8 @@ async function syncIssues(sinceDate) {
         const assigneeId = await getNeonUserId(issue.assigned_to)
         const authorId = await getNeonUserId(issue.author)
         const projectId = projectCache.get(issue.project?.id)
-        const status = statusMap[issue.status?.name] || issue.status?.name || 'New'
-        const priority = priorityMap[issue.priority?.name] || 'Medium'
+        const status = STATUS_MAP[issue.status?.name] || issue.status?.name || 'New'
+        const priority = PRIORITY_MAP[issue.priority?.name] || 'Medium'
         const bzField = issue.custom_fields?.find((cf) => cf.id === 9)
         const bzId = bzField ? String(bzField.value) : null
 

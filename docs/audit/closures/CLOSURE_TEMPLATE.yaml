@@ -1,0 +1,27 @@
+# Audit Closure Template — Redmine CEO Dashboard
+# Copy this file to YYYY_MM_DD_audit_closures.yaml and fill in findings
+
+audit_date: "YYYY-MM-DD"
+total_findings: 0
+closed_count: 0
+
+# Terminal States (NO deferrals allowed):
+# - closed_in_commit: Fixed and verified in a commit
+# - upstream_blocked: Blocked on external dependency
+# - blocked_on_user: Requires user decision/action
+# - verified_clean: Investigation proved not a real issue
+
+findings: []
+  # Example entry:
+  # - id: AUD-001
+  #   terminal_state: closed_in_commit
+  #   commit: "abc1234"
+  #   summary: "Fixed email normalization in sync-redmine.js"
+  #
+  # - id: AUD-002
+  #   terminal_state: upstream_blocked
+  #   blocker: "Waiting for Redmine API upgrade"
+  #
+  # - id: AUD-003
+  #   terminal_state: verified_clean
+  #   evidence: "Query confirmed thinkingcode.com already normalized"

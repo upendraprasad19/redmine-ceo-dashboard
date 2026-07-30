@@ -3,6 +3,9 @@
  * Called by Vercel Cron daily + dashboard "Refresh Data" button
  */
 const { getDb } = require('../../lib/db')
+const { normalizeEmail } = require('../../lib/email-utils')
+const { STATUS_MAP, PRIORITY_MAP, APPROVED_PROJECT_IDS } = require('../../lib/constants')
+const { send500 } = require('../../lib/api-error')
 
 const REDMINE_URL = (process.env.REDMINE_URL || '').replace(/\/$/, '')
 const REDMINE_KEY = process.env.REDMINE_API_KEY
@@ -33,10 +36,6 @@ const userCache = new Map()
 const projectCache = new Map()
 const deliveryOwnerEnumToNeonId = new Map()
 
-const APPROVED_PROJECT_IDS = new Set([
-  2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
-  61, 62, 63, 65, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
-])
 const FALLBACK_DAYS = 182
 
 async function buildDeliveryOwnerEnumMap(sql) {
@@ -131,7 +130,7 @@ export default async function handler(req, res) {
         const name = `${u.firstname || ''} ${u.lastname || ''}`.trim()
         const r = await sql`
           INSERT INTO users (redmine_id, name, email, initials, active)
-          VALUES (${u.id}, ${name}, ${u.mail || null}, ${initials}, true)
+          VALUES (${u.id}, ${name}, ${normalizeEmail(u.mail) || null}, ${initials}, true)
           ON CONFLICT (redmine_id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, updated_at = NOW()
           RETURNING id
         `
@@ -169,33 +168,13 @@ export default async function handler(req, res) {
       `&status_id=*&updated_on=>=${sinceDate}&sort=updated_on:desc`,
     )
     const filteredIssues = issues.filter((i) => APPROVED_PROJECT_IDS.has(i.project?.id))
-    const statusMap = {
-      New: 'New',
-      'In Progress': 'In Progress',
-      'Re Open': 'Re Open',
-      Open: 'Open',
-      'Code Review': 'Review',
-      Feedback: 'Closed',
-      Blocked: 'Blocked',
-      Resolved: 'Closed',
-      Closed: 'Closed',
-      Verified: 'Closed',
-      Rejected: 'Closed',
-    }
-    const priorityMap = {
-      Low: 'Low',
-      Normal: 'Medium',
-      High: 'High',
-      Urgent: 'Critical',
-      Immediate: 'Critical',
-    }
 
     for (const issue of filteredIssues) {
       const assigneeId = await getNeonUserId(sql, issue.assigned_to)
       const authorId = await getNeonUserId(sql, issue.author)
       const projectId = projectCache.get(issue.project?.id)
-      const status = statusMap[issue.status?.name] || issue.status?.name || 'New'
-      const priority = priorityMap[issue.priority?.name] || 'Medium'
+      const status = STATUS_MAP[issue.status?.name] || issue.status?.name || 'New'
+      const priority = PRIORITY_MAP[issue.priority?.name] || 'Medium'
       const bzField = issue.custom_fields?.find((cf) => cf.id === 9)
       const bzId = bzField ? String(bzField.value) : null
 
@@ -285,7 +264,6 @@ export default async function handler(req, res) {
     log.push('Sync complete!')
     res.status(200).json({ ok: true, log })
   } catch (err) {
-    console.error('Sync error:', err)
-    res.status(500).json({ error: 'Internal server error' })
+    return send500(res, err, 'sync')
   }
 }

@@ -3,6 +3,8 @@
  * Backfills the last 6 months regardless of last_synced_at.
  * GET /api/sync-full  (Vercel Cron sends Authorization: Bearer <CRON_SECRET>)
  */
+const { send500 } = require('../../lib/api-error')
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
@@ -23,7 +25,6 @@ export default async function handler(req, res) {
     child.on('exit', (code) => console.log(`[FullSync] finished with code ${code}`))
     res.status(200).json({ ok: true, message: 'Full sync started in background' })
   } catch (err) {
-    console.error('Full sync error:', err)
-    res.status(500).json({ error: 'Internal server error' })
+    return send500(res, err, 'sync-full')
   }
 }

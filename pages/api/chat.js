@@ -4,6 +4,7 @@ const { chat } = require('../../lib/ai')
 const { getRecentMessages, saveMessage } = require('../../lib/redis')
 const { tools } = require('../../lib/gpt-tools')
 const { executeToolCall } = require('../../lib/gpt-executor')
+const { send500 } = require('../../lib/api-error')
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -142,7 +143,6 @@ Today is ${new Date().toISOString().split('T')[0]}.`
 
     res.status(200).json({ message: aiResponse, role: 'assistant' })
   } catch (err) {
-    console.error('Chat API error:', err)
-    res.status(500).json({ error: 'Failed to process chat message' })
+    return send500(res, err, 'chat')
   }
 }

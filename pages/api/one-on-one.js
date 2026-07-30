@@ -1,6 +1,7 @@
 const { getCurrentUser } = require('../../lib/auth')
 const { getDb } = require('../../lib/db')
 const { chat } = require('../../lib/ai')
+const { send500 } = require('../../lib/api-error')
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -119,7 +120,6 @@ Keep it concise with bullet points. Focus on the most important items.`,
       },
     })
   } catch (err) {
-    console.error('One-on-one API error:', err)
-    res.status(500).json({ error: 'Failed to generate talking points' })
+    return send500(res, err, 'one-on-one')
   }
 }

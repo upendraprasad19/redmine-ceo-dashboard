@@ -1,5 +1,6 @@
-import { getDb } from '../../lib/db'
+import { send500 } from '../../lib/api-error'
 import { getCurrentUser } from '../../lib/auth'
+import { getDb } from '../../lib/db'
 
 const BLOCKED_IP_RANGES = [
   /^10\./,
@@ -40,7 +41,9 @@ export default async function handler(req, res) {
   }
 
   if (!parsed.searchParams.has('format') || parsed.searchParams.get('format') !== 'csv') {
-    return res.status(400).json({ error: 'URL must be a CSV export link (format=csv parameter required)' })
+    return res
+      .status(400)
+      .json({ error: 'URL must be a CSV export link (format=csv parameter required)' })
   }
 
   if (isPrivateHost(parsed.hostname)) {
@@ -96,8 +99,6 @@ export default async function handler(req, res) {
 
     res.status(200).json({ success: true, records_added: addedCount })
   } catch (err) {
-    console.error('Google Sheet Sync Error:', err)
-    console.error('Google Sheet Sync Error:', err)
-    res.status(500).json({ error: 'Internal server error' })
+    return send500(res, err, 'sync-leave')
   }
 }

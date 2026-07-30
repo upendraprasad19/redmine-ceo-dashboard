@@ -65,6 +65,21 @@ export default async function handler(req, res) {
     const timestamp = req.headers['x-slack-request-timestamp']
     const signature = req.headers['x-slack-signature']
 
+    // ── Determine payload type ──
+    let payload
+    const contentType = req.headers['content-type'] || ''
+
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      const params = new URLSearchParams(rawBody)
+      const payloadStr = params.get('payload')
+      if (!payloadStr) {
+        return res.status(400).json({ error: 'Missing payload' })
+      }
+      payload = JSON.parse(payloadStr)
+    } else {
+      payload = JSON.parse(rawBody)
+    }
+
     // ── Signature verification ──
     // url_verification challenge doesn't carry signature headers
     if (payload?.type !== 'url_verification') {
@@ -78,27 +93,14 @@ export default async function handler(req, res) {
       }
     }
 
-    // ── Determine payload type ──
-    let payload
-    const contentType = req.headers['content-type'] || ''
-
-    if (contentType.includes('application/x-www-form-urlencoded')) {
-      // Interactive payloads come as form-urlencoded with a `payload` field
-      const params = new URLSearchParams(rawBody)
-      const payloadStr = params.get('payload')
-      if (!payloadStr) {
-        return res.status(400).json({ error: 'Missing payload' })
-      }
-      payload = JSON.parse(payloadStr)
-      return await handleInteraction(payload, res)
-    }
-
-    // Events API sends JSON
-    payload = JSON.parse(rawBody)
-
     // ── URL verification challenge ──
     if (payload.type === 'url_verification') {
       return res.status(200).json({ challenge: payload.challenge })
+    }
+
+    // ── Interactive payloads (form-urlencoded) ──
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      return await handleInteraction(payload, res)
     }
 
     // ── Event callback ──

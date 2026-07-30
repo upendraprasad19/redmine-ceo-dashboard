@@ -1,0 +1,234 @@
+# SoT Registry — Redmine CEO Dashboard
+# Auto-generated base: scripts/check-audit-readers-writers.js --format yaml
+# Manual additions: writer/reader details from codebase analysis
+
+registry_version: "1.0"
+generated_at: "2026-07-28T00:00:00Z"
+generator: "manual + scripts/check-audit-readers-writers.js"
+
+tables:
+  issues:
+    description: "Redmine issues synced to Neon — core work item table"
+    key_fields:
+      - "id"
+      - "redmine_id"
+    writers:
+      - file: "scripts/sync-redmine.js"
+        method: "syncIssues"
+        line: 1
+        description: "Bulk upsert issues from Redmine API"
+      - file: "scripts/sync-backfill.js"
+        method: "backfillIssues"
+        line: 1
+        description: "Backfill historical issues"
+    readers:
+      - file: "pages/api/tickets.js"
+        method: "handler"
+        line: 1
+        description: "Serve tickets to dashboard UI"
+      - file: "pages/api/overview.js"
+        method: "handler"
+        line: 1
+        description: "Aggregate issue counts for overview"
+      - file: "pages/api/pm-pulse/executive-snapshot.js"
+        method: "handler"
+        line: 1
+        description: "Executive snapshot metrics"
+    sync_paths:
+      - direction: "inbound"
+        script: "scripts/sync-redmine.js"
+        method: "syncIssues"
+    forbidden_patterns:
+      - pattern: "delivery_owner_ids = .* user_id"
+        reason: "Delivery Owner is enum, not user ID — must map via users.name"
+    vault_patterns:
+      - "[[delivery-owner-enum-vs-userid]]"
+      - "[[approved-project-filter]]"
+
+  users:
+    description: "Dashboard users with roles, auth, and notification preferences"
+    key_fields:
+      - "id"
+      - "email"
+    writers:
+      - file: "scripts/sync-redmine.js"
+        method: "syncUsers"
+        line: 1
+        description: "Sync users from Redmine"
+      - file: "pages/api/auth/login.js"
+        method: "handler"
+        line: 1
+        description: "Create/update user on login"
+    readers:
+      - file: "pages/api/auth/me.js"
+        method: "handler"
+        line: 1
+        description: "Return current user profile"
+      - file: "lib/auth.js"
+        method: "getCurrentUser"
+        line: 1
+        description: "Resolve user from session cookie"
+    sync_paths:
+      - direction: "inbound"
+        script: "scripts/sync-redmine.js"
+        method: "syncUsers"
+    forbidden_patterns:
+      - pattern: "thinking-code\\.com"
+        reason: "Must normalize to thinkingcode.com before storing"
+    vault_patterns:
+      - "[[email-normalization]]"
+
+  time_entries:
+    description: "Time logging entries from Redmine — workload/velocity metrics"
+    key_fields:
+      - "id"
+      - "redmine_id"
+    writers:
+      - file: "scripts/sync-redmine.js"
+        method: "syncTimeEntries"
+        line: 1
+        description: "Bulk upsert time entries from Redmine"
+    readers:
+      - file: "pages/api/timelogs.js"
+        method: "handler"
+        line: 1
+        description: "Serve time logs to UI"
+      - file: "pages/api/no-timelog.js"
+        method: "handler"
+        line: 1
+        description: "Count people without time logs"
+      - file: "pages/api/pm-pulse/developer-load.js"
+        method: "handler"
+        line: 1
+        description: "Developer load metrics"
+    sync_paths:
+      - direction: "inbound"
+        script: "scripts/sync-redmine.js"
+        method: "syncTimeEntries"
+    forbidden_patterns:
+      - pattern: "COUNT\\(\\*\\) WHERE.*NOT IN"
+        reason: "UNION deduplicates — use UNION ALL or subquery"
+    vault_patterns:
+      - "[[union-vs-union-all-count]]"
+
+  dashboard_users:
+    description: "Extended user profiles with roles, notifications, password hashes"
+    key_fields:
+      - "id"
+      - "email"
+    writers:
+      - file: "pages/api/auth/change-password.js"
+        method: "handler"
+        line: 1
+        description: "Update password hash"
+      - file: "pages/api/auth/forgot-password/set-new-password.js"
+        method: "handler"
+        line: 1
+        description: "Reset password"
+    readers:
+      - file: "lib/auth.js"
+        method: "getCurrentUser"
+        line: 1
+        description: "Resolve user role and permissions"
+      - file: "pages/api/auth/me.js"
+        method: "handler"
+        line: 1
+        description: "Return user profile"
+    sync_paths: []
+    forbidden_patterns:
+      - pattern: "password_hash.*=.*[^(bcrypt)]"
+        reason: "Must bcrypt hash on every write"
+    vault_patterns:
+      - "[[dual-auth-api]]"
+
+  slack_threads:
+    description: "Slack thread tracking for Telegram/Slack integration"
+    key_fields:
+      - "id"
+    writers:
+      - file: "bots/telegram/handlers/intimation.js"
+        method: "handler"
+        line: 1
+        description: "Create thread on intimation"
+    readers:
+      - file: "bots/telegram/handlers/intimation.js"
+        method: "handler"
+        line: 1
+        description: "Check existing thread"
+    sync_paths: []
+    forbidden_patterns: []
+    vault_patterns: []
+
+  commitments:
+    description: "AI-extracted developer commitments from Telegram conversations"
+    key_fields:
+      - "id"
+    writers:
+      - file: "lib/commitments.js"
+        method: "extractCommitment"
+        line: 1
+        description: "Extract and store commitment"
+    readers:
+      - file: "crons/commitment-followup.js"
+        method: "handler"
+        line: 1
+        description: "Check pending commitments"
+    sync_paths: []
+    forbidden_patterns: []
+    vault_patterns: []
+
+  intimation_relays:
+    description: "Cross-user intimation relay state machine"
+    key_fields:
+      - "id"
+    writers:
+      - file: "lib/intimation-relay.js"
+        method: "createRelay"
+        line: 1
+        description: "Create new relay"
+    readers:
+      - file: "bots/telegram/handlers/intimation.js"
+        method: "handler"
+        line: 1
+        description: "Process callback"
+    sync_paths: []
+    forbidden_patterns: []
+    vault_patterns: []
+
+  password_reset_tokens:
+    description: "Password reset token storage for forgot-password flow"
+    key_fields:
+      - "id"
+      - "token"
+    writers:
+      - file: "pages/api/auth/forgot-password/request.js"
+        method: "handler"
+        line: 1
+        description: "Create reset token"
+    readers:
+      - file: "pages/api/auth/forgot-password/verify-token.js"
+        method: "handler"
+        line: 1
+        description: "Verify token validity"
+    sync_paths: []
+    forbidden_patterns: []
+    vault_patterns: []
+
+  _schema_migrations:
+    description: "Schema migration tracking — which migrations have been applied"
+    key_fields:
+      - "id"
+      - "name"
+    writers:
+      - file: "scripts/migrate.js"
+        method: "runMigration"
+        line: 1
+        description: "Mark migration as applied"
+    readers:
+      - file: "scripts/migrate.js"
+        method: "getAppliedMigrations"
+        line: 1
+        description: "Check which migrations applied"
+    sync_paths: []
+    forbidden_patterns: []
+    vault_patterns: []

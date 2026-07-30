@@ -8,36 +8,11 @@
  */
 
 const { neon } = require('@neondatabase/serverless')
+const { STATUS_MAP, PRIORITY_MAP, APPROVED_PROJECT_IDS } = require('../lib/constants')
 const sql = neon(process.env.DATABASE_URL)
 
 const REDMINE_URL = (process.env.REDMINE_URL || '').replace(/\/$/, '')
 const REDMINE_KEY = process.env.REDMINE_API_KEY
-
-const APPROVED = [
-  2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
-  61, 62, 63, 65, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
-]
-
-const statusMap = {
-  New: 'New',
-  'In Progress': 'In Progress',
-  'Re Open': 'Re Open',
-  Open: 'Open',
-  'Code Review': 'Review',
-  Feedback: 'Closed',
-  Blocked: 'Blocked',
-  Resolved: 'Closed',
-  Closed: 'Closed',
-  Verified: 'Closed',
-  Rejected: 'Closed',
-}
-const priorityMap = {
-  Low: 'Low',
-  Normal: 'Medium',
-  High: 'High',
-  Urgent: 'Critical',
-  Immediate: 'Critical',
-}
 
 const userCache = new Map()
 const projectCache = new Map()
@@ -111,7 +86,7 @@ async function runWeeklyReconcile() {
   const projects = await fetchAll('/projects', 'projects')
   const projectIdToNeon = {}
   for (const p of projects) {
-    if (!APPROVED.includes(p.id)) continue
+    if (!APPROVED_PROJECT_IDS.has(p.id)) continue
     const r = await sql`
       INSERT INTO projects (redmine_id, name, description, status)
       VALUES (${p.id}, ${p.name}, ${p.description || null}, ${p.status === 1 ? 'active' : 'archived'})
@@ -124,7 +99,7 @@ async function runWeeklyReconcile() {
   }
 
   // Fetch ALL issues for each approved project
-  for (const redmineProjectId of APPROVED) {
+  for (const redmineProjectId of APPROVED_PROJECT_IDS) {
     const neonProjectId = projectCache.get(redmineProjectId)
     if (!neonProjectId) continue
 
@@ -144,8 +119,8 @@ async function runWeeklyReconcile() {
         // Missing issue — insert it
         const assigneeId = await getNeonUserId(issue.assigned_to)
         const authorId = await getNeonUserId(issue.author)
-        const status = statusMap[issue.status?.name] || issue.status?.name || 'New'
-        const priority = priorityMap[issue.priority?.name] || 'Medium'
+        const status = STATUS_MAP[issue.status?.name] || issue.status?.name || 'New'
+        const priority = PRIORITY_MAP[issue.priority?.name] || 'Medium'
         const bzField = issue.custom_fields?.find((cf) => cf.id === 9)
         const doField = issue.custom_fields?.find((cf) => cf.id === 25)
         const _doEnumVals = Array.isArray(doField?.value)

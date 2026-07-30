@@ -1,6 +1,7 @@
 const { getDb } = require('../../../lib/db')
 const { verifyPassword, createToken, setAuthCookie } = require('../../../lib/auth')
 const { checkRateLimit } = require('../../../lib/rate-limit')
+const { send500 } = require('../../../lib/api-error')
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -75,7 +76,6 @@ export default async function handler(req, res) {
       },
     })
   } catch (err) {
-    console.error('Login error:', err)
-    res.status(500).json({ error: 'Internal server error' })
+    return send500(res, err, 'login')
   }
 }

@@ -22,6 +22,7 @@
 - [[hardcoded-redmine-url]] — Hardcoded wrong Redmine URL in ticket links
 - [[sync-status-map-duplication]] — Status map duplicated in 4 files, can drift apart
 - [[scroll-jump-from-global-sort]] — Shared sort state across accordions triggers scroll anchoring
+- [[default-sort-indicator-mismatch]] — Default client-side sort must update header indicator to match
 - [[people-screen-metrics-limitations]] — No derived performance metric, hardcoded capacity, redundant computation
 - [[non-engineering-and-unassigned-users]] — 22 users without team + 8 in non-engineering teams hidden from screen
 - [[union-vs-union-all-count]] — UNION deduplicates SELECT 1 rows, making COUNT(*) always return 1

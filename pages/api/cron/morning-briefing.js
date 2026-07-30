@@ -5,14 +5,15 @@
  * Protected by CRON_SECRET header (dual auth: Bearer or x-cron-secret).
  */
 
+import { send500 } from '../../../lib/api-error'
 import { getDb } from '../../../lib/db'
 import { sendTelegramMessage } from '../../../lib/telegram'
-import { send500 } from '../../../lib/api-error'
 
 const APPROVED_REDMINE_IDS = [
   2, 3, 5, 7, 14, 15, 16, 17, 18, 19, 20, 21, 23, 29, 34, 43, 44, 47, 49, 50, 51, 55, 56, 57, 60,
   61, 62, 63, 65, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
 ]
+const EXPECTED_TIME_TEAMS = ['AI', 'DB', 'DevOps', 'JS/UI', 'Java', 'QA']
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end()
@@ -20,7 +21,9 @@ export default async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) return res.status(500).json({ error: 'CRON_SECRET not configured' })
 
-  const bearerToken = req.headers.authorization ? req.headers.authorization.replace('Bearer ', '') : null
+  const bearerToken = req.headers.authorization
+    ? req.headers.authorization.replace('Bearer ', '')
+    : null
   const headerSecret = req.headers['x-cron-secret']
   if (bearerToken !== cronSecret && headerSecret !== cronSecret) {
     return res.status(401).json({ error: 'Unauthorized' })
@@ -101,8 +104,8 @@ async function buildBriefing(sql, user, _profile) {
       ? sql`SELECT COUNT(*) AS count FROM issues WHERE due_date < CURRENT_DATE AND status NOT IN ('Closed','Resolved','Verified','Rejected') AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`
       : sql`SELECT COUNT(*) AS count FROM issues i JOIN users u ON u.id = i.assigned_to_id WHERE i.due_date < CURRENT_DATE AND i.status NOT IN ('Closed','Resolved','Verified','Rejected') AND u.team = ${team} AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
     isManager
-      ? sql`SELECT COUNT(*) AS count FROM users WHERE active = true AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE)`
-      : sql`SELECT COUNT(*) AS count FROM users WHERE active = true AND team = ${team} AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE)`,
+      ? sql`SELECT COUNT(*) AS count FROM users WHERE active = true AND team = ANY(${EXPECTED_TIME_TEAMS}::text[]) AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE)`
+      : sql`SELECT COUNT(*) AS count FROM users WHERE active = true AND team = ${team} AND team = ANY(${EXPECTED_TIME_TEAMS}::text[]) AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE)`,
     isManager
       ? sql`SELECT COUNT(*) AS count FROM issues WHERE status = 'Blocked' AND project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`
       : sql`SELECT COUNT(*) AS count FROM issues i JOIN users u ON u.id = i.assigned_to_id WHERE i.status = 'Blocked' AND u.team = ${team} AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${APPROVED_REDMINE_IDS}::int[]))`,
@@ -143,8 +146,8 @@ async function buildBriefing(sql, user, _profile) {
 
   if (concerns.includes('missing_time_logs') && missing > 0) {
     const who = isManager
-      ? await sql`SELECT name FROM users WHERE active = true AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE) ORDER BY name LIMIT 5`
-      : await sql`SELECT name FROM users WHERE active = true AND team = ${team} AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE) LIMIT 5`
+      ? await sql`SELECT name FROM users WHERE active = true AND team = ANY(${EXPECTED_TIME_TEAMS}::text[]) AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE) ORDER BY name LIMIT 5`
+      : await sql`SELECT name FROM users WHERE active = true AND team = ${team} AND team = ANY(${EXPECTED_TIME_TEAMS}::text[]) AND NOT EXISTS (SELECT 1 FROM time_entries WHERE user_id = users.id AND spent_on = CURRENT_DATE) LIMIT 5`
     if (who.length > 0) {
       lines.push(`\n⏰ *No time log yet:* ${who.map((u) => u.name).join(', ')}`)
     }
