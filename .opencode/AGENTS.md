@@ -7,10 +7,11 @@ Every time you start work AND after every edit file/tool call, you MUST follow t
 ---
 
 ### A. Session start
-1. **Read board**: `.opencode/board/INDEX.md` — what's active/blocked/backlog
-2. **Read vault**: `.opencode/vault/INDEX.md` — check existing patterns + gotchas
-3. **Read git status**: know what files are dirty before you touch anything
-4. **Run env check**: confirm `.env.local` has valid `DATABASE_URL` and `REDMINE_API_KEY` (skip if in CI)
+1. **Run bootstrap**: `npm run bootstrap` — surfaces board state, vault freshness, discipline checklist
+2. **Read board**: `.opencode/board/INDEX.md` — what's active/blocked/backlog
+3. **Read vault**: `.opencode/vault/INDEX.md` — check existing patterns + gotchas
+4. **Read git status**: know what files are dirty before you touch anything
+5. **Run env check**: confirm `.env.local` has valid `DATABASE_URL` and `REDMINE_API_KEY` (skip if in CI)
 
 ### B. Plan-first mode — tiered (MANDATORY)
 
@@ -77,7 +78,7 @@ not every change needs the full ceremony. Use the tier table to right-size the p
 4. **DB drift check** (see section below)
 5. **Code review**: Present diff summary (files changed, lines added/removed, full diff) to the user. Do NOT commit until user explicitly approves.
 6. **Vault + board are current**: INDEX.md files reflect all work done
-7. **Discipline gates**: Pre-commit runs deferral-euphemism gate (`check-no-deferral.js`) + audit-closure validator (`validate-audit-closure.js`). Pre-push runs blast-radius tiering (`blast-radius.js`) and skips full suite for feature-only changes.
+7. **Discipline gates**: Pre-commit runs deferral-euphemism gate (`check-no-deferral.js`) + audit-closure validator (`validate-audit-closure.js`) + discipline check (`check-discipline.js`). Pre-push runs blast-radius tiering (`blast-radius.js`) and skips full suite for feature-only changes.
 
 ---
 

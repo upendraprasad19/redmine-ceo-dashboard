@@ -141,6 +141,18 @@ Each future phase gets its own spec + plan under `docs/superpowers/`.
    daily crons. The workflow `curl`s `/api/cron/run?job=batch` with
    `CRON_SECRET` header.
 
+## Discipline enforcement (automated)
+- **Session start:** Run `npm run bootstrap` — shows board state, vault freshness,
+  discipline checklist. Do this before any code changes.
+- **Pre-commit:** `scripts/check-discipline.js` runs automatically via
+  `.husky/pre-commit`. Warns if active tasks lack plan files, vault is stale,
+  or done tasks are missing from INDEX.
+- **Post-commit:** `.husky/post-commit` reminds to run `skill self-learning`
+  if `vault/INDEX.md` wasn't in the commit diff.
+- **Manual check:** `npm run discipline` — run anytime to validate discipline state.
+- These checks are currently **warnings** (non-blocking). If violations persist,
+  escalate to blocking by removing `--warn` from `scripts/check-discipline.js`.
+
 ## Things not to do
 - Don't create new `sendTelegramMessage` copies — use the lib. (Phase 1's
   `tgSend` helpers in `lib/intimation-relay.js`, `crons/intimation-followup.js`,
