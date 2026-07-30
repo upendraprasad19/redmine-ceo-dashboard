@@ -11,10 +11,13 @@
  *   node scripts/board.js validate [--warn]
  *   node scripts/board.js sync
  *   node scripts/board.js next
+ *   node scripts/board.js retro
+ *   node scripts/board.js retro-mark
  */
 
 const fs = require('node:fs')
 const path = require('node:path')
+const { countDoneSinceLastRetro } = require('../lib/board-utils.js')
 
 const BOARD_DIR = path.resolve(__dirname, '..', '.opencode', 'board')
 const INDEX_PATH = path.join(BOARD_DIR, 'INDEX.md')
@@ -183,6 +186,13 @@ function cmdDone(nnn, summary) {
   }
 
   cmdSync()
+
+  const doneSinceRetro = countDoneSinceLastRetro(BOARD_DIR)
+  if (doneSinceRetro >= 5) {
+    console.error(`\n  ⚠️  RETRO DUE: ${doneSinceRetro} done tasks since last retro`)
+    console.error('  Run: node scripts/board.js retro')
+    console.error('  After retro: node scripts/board.js retro-mark\n')
+  }
 }
 
 function cmdValidate(warnOnly) {
@@ -307,6 +317,7 @@ function cmdSync() {
     '- **Done**: `node scripts/board.js done NNN "Summary"`',
     '- **Validate**: `node scripts/board.js validate`',
     '- **Sync INDEX.md**: `node scripts/board.js sync`',
+    '- **Retro**: `node scripts/board.js retro` / `retro-mark`',
     '',
   ]
 
@@ -316,6 +327,22 @@ function cmdSync() {
 
 function cmdNext() {
   console.log(getNextNumber())
+}
+
+function cmdRetro() {
+  const retroPath = path.join(BOARD_DIR, 'RETRO.md')
+  if (!fs.existsSync(retroPath)) {
+    console.error('RETRO.md not found at .opencode/board/RETRO.md')
+    process.exit(1)
+  }
+  const content = fs.readFileSync(retroPath, 'utf8')
+  console.log(content)
+}
+
+function cmdRetroMark() {
+  const lastRetro = path.join(BOARD_DIR, '.last-retro')
+  fs.writeFileSync(lastRetro, new Date().toISOString())
+  console.log('Created: .opencode/board/.last-retro')
 }
 
 // --- Main ---
@@ -365,14 +392,22 @@ async function main() {
     case 'next':
       cmdNext()
       break
+    case 'retro':
+      cmdRetro()
+      break
+    case 'retro-mark':
+      cmdRetroMark()
+      break
     default:
-      console.error('Commands: create, start, done, validate, sync, next')
+      console.error('Commands: create, start, done, validate, sync, next, retro, retro-mark')
       console.error('  create "slug" "Description"')
       console.error('  start NNN')
       console.error('  done NNN "Summary"')
       console.error('  validate [--warn]')
       console.error('  sync')
       console.error('  next')
+      console.error('  retro')
+      console.error('  retro-mark')
       process.exit(1)
   }
 }

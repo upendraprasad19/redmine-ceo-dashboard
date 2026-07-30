@@ -7,11 +7,11 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { execSync } = require('child_process')
+const { countDoneSinceLastRetro } = require('../../lib/board-utils.js')
 
 const BOARD_DIR = path.join(__dirname, '..', 'board')
 const VAULT_INDEX = path.join(__dirname, '..', '..', 'vault', 'INDEX.md')
 const DONE_DIR = path.join(BOARD_DIR, 'done')
-const LAST_RETRO = path.join(BOARD_DIR, '.last-retro')
 
 function vaultDaysOld() {
   try {
@@ -37,17 +37,6 @@ function doneTasksSinceVaultUpdate() {
       }).length
   } catch (_) {
     return 0
-  }
-}
-
-function retroDoneSinceVaultUpdate() {
-  try {
-    if (!fs.existsSync(LAST_RETRO)) return false
-    const retroMtime = fs.statSync(LAST_RETRO).mtimeMs
-    const vaultMtime = fs.statSync(VAULT_INDEX).mtimeMs
-    return retroMtime > vaultMtime
-  } catch (_) {
-    return false
   }
 }
 
@@ -78,9 +67,9 @@ function runIdleNudge() {
   }
 
   // ── Retro reminder ──────────────────────────────────────
-  if (doneSince >= 5 && !retroDoneSinceVaultUpdate()) {
-    console.log(`RETRO DUE: ${doneSince} done tasks since last vault update — run retro per board/RETRO.md`)
-    console.log('  (After retro, run: touch .opencode/board/.last-retro)')
+  const retroSince = countDoneSinceLastRetro(BOARD_DIR)
+  if (retroSince >= 5) {
+    console.log(`RETRO DUE: ${retroSince} done tasks since last retro — run: node scripts/board.js retro`)
   }
 }
 

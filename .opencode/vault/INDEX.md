@@ -15,6 +15,7 @@
 - [[dual-auth-api]] — Dual-auth pattern: server secret header OR session cookie for API routes
 - [[github-actions-cron-dispatch]] — Move hourly crons from Vercel Hobby to GitHub Actions
 - [[constants-extraction-pattern]] — Extract duplicated constants to lib/constants.js as single source of truth
+- [[sentinel-iso-parsing]] — Parse sentinel file ISO content instead of using filesystem mtime
 
 ## Gotchas
 - [[opencode-gitignore-force-add]] — .opencode/ is gitignored; need git add -f for tracked files
@@ -24,6 +25,7 @@
 - [[sync-status-map-duplication]] — Status map duplicated in 4 files, can drift apart
 - [[scroll-jump-from-global-sort]] — Shared sort state across accordions triggers scroll anchoring
 - [[default-sort-indicator-mismatch]] — Default client-side sort must update header indicator to match
+- [[retro-enforcement]] — Shared helper for retro trigger checks (board.js + idle-nudge.js)
 - [[people-screen-metrics-limitations]] — No derived performance metric, hardcoded capacity, redundant computation
 - [[non-engineering-and-unassigned-users]] — 22 users without team + 8 in non-engineering teams hidden from screen
 - [[union-vs-union-all-count]] — UNION deduplicates SELECT 1 rows, making COUNT(*) always return 1
