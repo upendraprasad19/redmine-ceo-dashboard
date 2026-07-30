@@ -3,7 +3,7 @@
 
 audit_date: "2026-07-28"
 total_findings: 40
-closed_count: 26
+closed_count: 27
 
 # Terminal States:
 # - closed_in_commit: Fixed and verified in a commit
@@ -80,8 +80,9 @@ findings:
     fixed_in: "pages/api/sync.js"
     
   - id: AUD-014
-    terminal_state: blocked_on_user
-    summary: "Developer load missing approved project filter — DEFERRED: requires query fix"
+    terminal_state: closed_in_commit
+    summary: "Developer load missing approved project filter — FIXED: added project_id IN subquery"
+    fixed_in: "pages/api/pm-pulse/developer-load.js"
     
   - id: AUD-015
     terminal_state: closed_in_commit

@@ -3,7 +3,7 @@ import { getDb } from '../../../lib/db'
 const { getCurrentUser } = require('../../../lib/auth')
 const { send500 } = require('../../../lib/api-error')
 
-const EXPECTED_TIME_TEAMS = ['AI', 'DB', 'DevOps', 'JS/UI', 'Java', 'QA']
+const { EXPECTED_TIME_TEAMS, APPROVED_PROJECT_IDS } = require('../../../lib/constants')
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
@@ -48,6 +48,7 @@ export default async function handler(req, res) {
             JOIN users u ON u.id = i.assigned_to_id
             LEFT JOIN projects p ON p.id = i.project_id
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
+              AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${Array.from(APPROVED_PROJECT_IDS)}::int[]))
               AND u.team = ${team}
             GROUP BY u.id, u.name, u.team
             ORDER BY u.name`
@@ -78,6 +79,7 @@ export default async function handler(req, res) {
             JOIN users u ON u.id = i.assigned_to_id
             LEFT JOIN projects p ON p.id = i.project_id
             WHERE i.status NOT IN ('Closed','Resolved','Verified','Rejected')
+              AND i.project_id IN (SELECT id FROM projects WHERE redmine_id = ANY(${Array.from(APPROVED_PROJECT_IDS)}::int[]))
             GROUP BY u.id, u.name, u.team
             ORDER BY u.team, u.name`,
 
