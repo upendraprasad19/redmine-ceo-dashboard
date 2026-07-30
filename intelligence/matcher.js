@@ -83,11 +83,11 @@ async function matchTicketToDeveloper(ticketId) {
         score += familiarityScore
         factors.familiarity = familiarityScore
 
-        // c) Recent performance (0-30): based on latest performance snapshot
+        // c) Recent performance (0-30): based on latest daily performance snapshot
         const perfRows = await sql`
           SELECT overall_score
           FROM performance_snapshots
-          WHERE user_id = ${uid}
+          WHERE user_id = ${uid} AND period = 'daily'
           ORDER BY snapshot_date DESC
           LIMIT 1
         `

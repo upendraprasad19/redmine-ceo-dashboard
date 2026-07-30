@@ -16,6 +16,7 @@
 - [[github-actions-cron-dispatch]] — Move hourly crons from Vercel Hobby to GitHub Actions
 - [[constants-extraction-pattern]] — Extract duplicated constants to lib/constants.js as single source of truth
 - [[sentinel-iso-parsing]] — Parse sentinel file ISO content instead of using filesystem mtime
+- [[multi-period-cron-with-deterministic-consumers]] — Cron stores daily/weekly/monthly; consumers pin to daily for deterministic scoring
 
 ## Gotchas
 - [[opencode-gitignore-force-add]] — .opencode/ is gitignored; need git add -f for tracked files
@@ -36,6 +37,7 @@
 - [[discipline-protocol-not-followed]] — Task-focused mindset overrides protocol; need visible checklist in every session
 - [[protocol-is-advisory-until-enforced]] — Documentation protocols fail; need automated hooks to enforce discipline
 - [[performance-snapshots-fk-wrong-table]] — performance_snapshots FK pointed at dashboard_users(id) instead of users(id), scoring 0 users
+- [[distinct-on-non-deterministic-multiple-periods]] — DISTINCT ON + ORDER BY snapshot_date non-deterministic when multiple periods share same date
 
 ## Tags
 - See `tags/INDEX.md` for tag index.
