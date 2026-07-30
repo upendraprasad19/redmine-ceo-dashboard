@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -20,6 +22,9 @@ jobs:
 
       - name: Lint
         run: npx @biomejs/biome check .
+
+      - name: Discipline check
+        run: node scripts/check-discipline.js
 
       - name: Unit tests with coverage
         run: npm run test:coverage

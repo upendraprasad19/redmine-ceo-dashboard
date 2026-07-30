@@ -3,4 +3,5 @@ if [ "$TIER" = "feature" ]; then
   echo "blast-radius=feature — skipping local gates; CI is backstop."
   exit 0
 fi
+node scripts/check-discipline.js || exit 1
 npm run test:unit && node scripts/board.js validate && npm run build && node scripts/review-diff.js

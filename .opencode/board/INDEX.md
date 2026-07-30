@@ -40,6 +40,7 @@ _No backlog tasks._
 - [discipline-enforcement-plugin](done/032-discipline-enforcement-plugin.md) — Machine-enforced discipline gates via opencode plugin (session-start gate, plan-first gate, post-edit test gate, auto self-learning, compliance report)
 - [aud-029-unit-tests](done/033-aud-029-unit-tests.md) — Add unit tests for 8 lib/ modules: db, admin, redis, rate-limit, table-audit, gpt-executor, ai, chat-enrichment
 - [performance-periods](done/034-performance-periods.md) — Fix PM Pulse weekly/monthly views — cron now stores all 3 periods, fix matcher + gpt-executor to use daily for deterministic scoring
+- [blocking-discipline-gates](done/035-blocking-discipline-gates.md) — 3-tier enforcement: advisory pre-commit, blocking pre-push (account tier), blocking CI pipeline
 
 ## Board protocol
 - **Creating a task**: `node scripts/board.js create "slug" "Description"`

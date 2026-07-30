@@ -193,6 +193,27 @@ function cmdDone(nnn, summary) {
     console.error('  Run: node scripts/board.js retro')
     console.error('  After retro: node scripts/board.js retro-mark\n')
   }
+
+  // Self-learning batch check (ISO timestamp sentinel, every 3 tasks)
+  const slSentinel = path.join(BOARD_DIR, '.last-selflearning')
+  const doneDirPath = path.join(BOARD_DIR, 'done')
+  const slCount = (() => {
+    try {
+      const ts = fs.readFileSync(slSentinel, 'utf8').trim()
+      const cutoff = new Date(ts).getTime()
+      return fs
+        .readdirSync(doneDirPath)
+        .filter((f) => f.endsWith('.md'))
+        .filter((f) => fs.statSync(path.join(doneDirPath, f)).mtimeMs > cutoff).length
+    } catch {
+      return Infinity
+    }
+  })()
+  if (slCount >= 3) {
+    console.log('\n  MANDATORY: Run `skill self-learning` to capture patterns/gotchas')
+    console.log('  Run: skill self-learning\n')
+    fs.writeFileSync(slSentinel, new Date().toISOString())
+  }
 }
 
 function cmdValidate(warnOnly) {
