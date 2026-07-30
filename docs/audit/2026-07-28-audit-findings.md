@@ -168,6 +168,7 @@
 - **Description:** `/api/cron` bypass matches all sub-paths, trusting each endpoint to verify CRON_SECRET.
 - **Impact:** Future cron endpoint without CRON_SECRET would be unauthenticated.
 - **Proposed Fix:** Remove `/api/cron` from PUBLIC_PATHS.
+- **Status:** ✅ CLOSED — Replaced `/api/cron` with `/api/cron/run` in PUBLIC_PATHS. All sub-cron endpoints verify CRON_SECRET internally. GitHub Actions cron-batch hits `/api/cron/run?job=batch` — continues working.
 
 ### AUD-020 — 8 Unmonitored Copies of APPROVED_PROJECT_IDS
 - **Lens:** Data Integrity — Projects
@@ -225,6 +226,7 @@
 - **Description:** Contract contains 9 tables that migration 023 drops.
 - **Impact:** Developers may reference dropped tables.
 - **Proposed Fix:** Regenerate contract after migration 023.
+- **Status:** ✅ CLOSED — Applied remaining migration 023 (dropped 4 orphan tables: anomaly_alerts, daily_snapshots, register_rate_limit, telegram_sessions). Regenerated contract — now 36 tables.
 
 ### AUD-028 — Latent SQL Injection Pattern
 - **Lens:** Security — API

@@ -8,7 +8,7 @@ const PUBLIC_PATHS = [
   '/api/auth/forgot-password',
   '/api/telegram/webhook',
   '/api/slack/events',
-  '/api/cron',
+  '/api/cron/run',
 ]
 
 export function middleware(request) {

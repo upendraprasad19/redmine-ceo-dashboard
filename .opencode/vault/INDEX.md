@@ -82,7 +82,8 @@
 - [[check-module-system-regex-bug]] — check-module-system.js regex logic error may miss violations (AUD-025)
 - [[password-reset-rate-limit-gap]] — Forgot-password flow has no rate limiting (AUD-011)
 - [[username-enumeration-via-response-shape]] — forgot-password channels leaks user existence (AUD-018)
-- [[schema-contract-stale-after-migration]] — Schema contract has tables that migration 023 drops (AUD-027)
+- [[schema-contract-stale-after-migration]] — Schema contract has tables that migration 023 drops (AUD-027) — RESOLVED: migration 023 fully applied, contract regenerated (36 tables)
+- [[migration-023-partial-application]] — Migrations can be partially applied; verify via information_schema after running
 - [[gate-script-coverage-gap]] — Gate scripts can have coverage gaps (AUD-020)
 - [[latent-sql-interpolation-in-unused-variable]] — Dead code with SQL injection risk (AUD-028)
 - [[err-message-leak-in-cron-batch-response]] — err.message exposed in cron batch response (AUD-015)

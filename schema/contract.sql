@@ -1,22 +1,12 @@
 -- Schema contract generated from database
--- Generated: 2026-07-24T12:39:25.687Z
+-- Generated: 2026-07-30T15:56:09.530Z
 -- This file is the source of truth for expected DB schema.
 -- Run: node scripts/generate-schema-contract.js to regenerate.
 
-CREATE TABLE access_requests (
-  id integer NOT NULL DEFAULT nextval('access_requests_id_seq'::regclass),
-  full_name text NOT NULL,
-  email text NOT NULL,
-  team text,
-  message text,
-  status text NOT NULL DEFAULT 'pending'::text,
-  reviewed_by integer,
-  reviewed_at timestamp with time zone,
-  created_at timestamp with time zone NOT NULL DEFAULT now()
+CREATE TABLE _schema_migrations (
+  filename text NOT NULL,
+  applied_at timestamp with time zone DEFAULT now()
 );
-
-CREATE INDEX idx_access_requests_email_lower ON public.access_requests USING btree (lower(email));
-CREATE INDEX idx_access_requests_status ON public.access_requests USING btree (status);
 
 CREATE TABLE ai_config (
   id integer NOT NULL DEFAULT nextval('ai_config_id_seq'::regclass),
@@ -29,19 +19,6 @@ CREATE TABLE ai_config (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now()
 );
-
-CREATE TABLE anomaly_alerts (
-  id integer NOT NULL DEFAULT nextval('anomaly_alerts_id_seq'::regclass),
-  alert_type text NOT NULL,
-  entity_type text,
-  entity_id integer,
-  message text NOT NULL,
-  severity text DEFAULT 'warning'::text,
-  sent_at timestamp with time zone DEFAULT now(),
-  resolved_at timestamp with time zone
-);
-
-CREATE UNIQUE INDEX anomaly_alerts_alert_type_entity_id_entity_type_key ON public.anomaly_alerts USING btree (alert_type, entity_id, entity_type);
 
 CREATE TABLE availability_alerts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -158,16 +135,6 @@ CREATE TABLE commitments (
 
 CREATE INDEX idx_commitments_due_pending ON public.commitments USING btree (due_at) WHERE (status = 'pending'::text);
 
-CREATE TABLE conversation_history (
-  id integer NOT NULL DEFAULT nextval('conversation_history_id_seq'::regclass),
-  telegram_id bigint NOT NULL,
-  role text NOT NULL,
-  content text NOT NULL,
-  created_at timestamp with time zone DEFAULT now()
-);
-
-CREATE INDEX idx_conv_telegram_id ON public.conversation_history USING btree (telegram_id, created_at DESC);
-
 CREATE TABLE conversation_memory (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id integer,
@@ -181,20 +148,6 @@ CREATE TABLE conversation_memory (
 
 CREATE INDEX idx_conversation_memory_embedding ON public.conversation_memory USING ivfflat (embedding vector_cosine_ops) WITH (lists='100');
 CREATE INDEX idx_conversation_memory_user_time ON public.conversation_memory USING btree (user_id, created_at DESC);
-
-CREATE TABLE daily_snapshots (
-  snapshot_date date NOT NULL,
-  team text NOT NULL,
-  open_tickets integer DEFAULT 0,
-  overdue_tickets integer DEFAULT 0,
-  blocked_tickets integer DEFAULT 0,
-  critical_tickets integer DEFAULT 0,
-  closed_today integer DEFAULT 0,
-  hours_logged numeric DEFAULT 0,
-  members_logged integer DEFAULT 0,
-  total_members integer DEFAULT 0,
-  avg_done_ratio numeric DEFAULT 0
-);
 
 CREATE TABLE daily_time_status (
   id integer,
@@ -320,22 +273,6 @@ CREATE TABLE leave_records (
 
 CREATE INDEX idx_leave_user ON public.leave_records USING btree (user_id);
 
-CREATE TABLE leave_requests (
-  id integer NOT NULL DEFAULT nextval('leave_requests_id_seq'::regclass),
-  user_id integer,
-  leave_type text NOT NULL,
-  start_date date NOT NULL,
-  end_date date NOT NULL,
-  reason text,
-  status text NOT NULL DEFAULT 'pending'::text,
-  reviewed_by integer,
-  reviewed_at timestamp with time zone,
-  created_at timestamp with time zone DEFAULT now()
-);
-
-CREATE INDEX idx_leave_requests_status ON public.leave_requests USING btree (status);
-CREATE INDEX idx_leave_requests_user ON public.leave_requests USING btree (user_id);
-
 CREATE TABLE memory_summaries (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id integer,
@@ -349,18 +286,6 @@ CREATE TABLE memory_summaries (
 
 CREATE INDEX idx_memory_summaries_embedding ON public.memory_summaries USING ivfflat (embedding vector_cosine_ops) WITH (lists='100');
 
-CREATE TABLE notification_log (
-  id integer NOT NULL DEFAULT nextval('notification_log_id_seq'::regclass),
-  type text NOT NULL,
-  ref_id integer,
-  channel text NOT NULL,
-  sent_date date NOT NULL DEFAULT CURRENT_DATE,
-  sent_at timestamp with time zone DEFAULT now()
-);
-
-CREATE INDEX idx_notification_log_type ON public.notification_log USING btree (type, sent_at);
-CREATE UNIQUE INDEX notification_log_type_ref_id_channel_sent_date_key ON public.notification_log USING btree (type, ref_id, channel, sent_date);
-
 CREATE TABLE password_reset_tokens (
   id integer NOT NULL DEFAULT nextval('password_reset_tokens_id_seq'::regclass),
   user_id integer NOT NULL,
@@ -373,31 +298,6 @@ CREATE TABLE password_reset_tokens (
 );
 
 CREATE INDEX idx_prt_user_used ON public.password_reset_tokens USING btree (user_id, used_at);
-
-CREATE TABLE pending_registrations (
-  id integer NOT NULL DEFAULT nextval('pending_registrations_id_seq'::regclass),
-  code text NOT NULL,
-  linked_redmine_user_id integer NOT NULL,
-  username text NOT NULL,
-  password_hash text NOT NULL,
-  email text NOT NULL,
-  email_verified boolean NOT NULL DEFAULT false,
-  email_otp text,
-  email_otp_expires_at timestamp with time zone,
-  email_otp_attempts integer NOT NULL DEFAULT 0,
-  telegram_id bigint,
-  telegram_verified_at timestamp with time zone,
-  verified_channel text,
-  status text NOT NULL DEFAULT 'awaiting_verification'::text,
-  expires_at timestamp with time zone NOT NULL DEFAULT (now() + '00:30:00'::interval),
-  created_at timestamp with time zone NOT NULL DEFAULT now()
-);
-
-CREATE UNIQUE INDEX idx_pending_registrations_active_email ON public.pending_registrations USING btree (lower(email)) WHERE (status = 'awaiting_verification'::text);
-CREATE UNIQUE INDEX idx_pending_registrations_active_redmine ON public.pending_registrations USING btree (linked_redmine_user_id) WHERE (status = 'awaiting_verification'::text);
-CREATE INDEX idx_pending_registrations_expires_at ON public.pending_registrations USING btree (expires_at);
-CREATE INDEX idx_pending_registrations_status ON public.pending_registrations USING btree (status);
-CREATE UNIQUE INDEX pending_registrations_code_key ON public.pending_registrations USING btree (code);
 
 CREATE TABLE performance_events (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -414,7 +314,6 @@ CREATE INDEX idx_perf_events_user_time ON public.performance_events USING btree 
 
 CREATE TABLE performance_snapshots (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id integer,
   snapshot_date date NOT NULL,
   period text DEFAULT 'daily'::text,
   tickets_closed integer DEFAULT 0,
@@ -435,9 +334,11 @@ CREATE TABLE performance_snapshots (
   score_delta numeric DEFAULT 0,
   trend text DEFAULT 'stable'::text,
   raw_data jsonb DEFAULT '{}'::jsonb,
-  created_at timestamp with time zone DEFAULT now()
+  created_at timestamp with time zone DEFAULT now(),
+  user_id integer NOT NULL
 );
 
+CREATE INDEX idx_perf_snapshots_user_date ON public.performance_snapshots USING btree (user_id, snapshot_date DESC);
 CREATE UNIQUE INDEX performance_snapshots_user_id_snapshot_date_period_key ON public.performance_snapshots USING btree (user_id, snapshot_date, period);
 
 CREATE TABLE person_performance (
@@ -518,13 +419,6 @@ CREATE TABLE projects (
 
 CREATE UNIQUE INDEX projects_redmine_id_key ON public.projects USING btree (redmine_id);
 
-CREATE TABLE register_rate_limit (
-  ip text NOT NULL,
-  bucket text NOT NULL,
-  window_start timestamp with time zone NOT NULL DEFAULT now(),
-  attempts integer NOT NULL DEFAULT 0
-);
-
 CREATE TABLE slack_ticket_updates (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   issue_id integer NOT NULL,
@@ -579,16 +473,6 @@ CREATE TABLE team_workload (
   open_tickets bigint,
   avg_tickets_per_person numeric
 );
-
-CREATE TABLE telegram_sessions (
-  id integer NOT NULL DEFAULT nextval('telegram_sessions_id_seq'::regclass),
-  chat_id text NOT NULL,
-  state text NOT NULL DEFAULT 'idle'::text,
-  context jsonb DEFAULT '{}'::jsonb,
-  updated_at timestamp with time zone DEFAULT now()
-);
-
-CREATE UNIQUE INDEX telegram_sessions_chat_id_key ON public.telegram_sessions USING btree (chat_id);
 
 CREATE TABLE time_entries (
   id integer NOT NULL DEFAULT nextval('time_entries_id_seq'::regclass),
