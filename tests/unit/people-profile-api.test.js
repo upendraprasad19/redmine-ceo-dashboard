@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 process.env.JWT_SECRET = 'test-secret-key-for-testing'
 process.env.NODE_ENV = 'test'
@@ -26,22 +26,66 @@ afterEach(() => {
 
 function mockRes() {
   const res = { statusData: null, statusCode: null }
-  res.status = (code) => { res.statusCode = code; return res }
-  res.json = (data) => { res.statusData = data; return res }
+  res.status = (code) => {
+    res.statusCode = code
+    return res
+  }
+  res.json = (data) => {
+    res.statusData = data
+    return res
+  }
   res.end = () => res
   return res
 }
 
 function mockReq(overrides = {}) {
-  return { method: 'GET', query: { id: '1', period: 'daily', ...overrides.query }, cookies: {}, headers: {} }
+  return {
+    method: 'GET',
+    query: { id: '1', period: 'daily', ...overrides.query },
+    cookies: {},
+    headers: {},
+  }
 }
 
 const personRow = { id: 1, name: 'Alice', team: 'AI', role: 'developer', initials: 'AD' }
 const dashUserRow = { dashboard_user_id: 50 }
-const perfRow = { overall_score: 75, trend: 'rising', score_delta: 5, output_score: 80, speed_score: 70, quality_score: 85, reliability_score: 65, collaboration_score: 70, tickets_closed: 12, tickets_in_progress: 3, tickets_overdue: 1, tickets_reopened: 1, hours_logged: 120, avg_resolution_time_hrs: 18, reopen_rate: 0.08, deadline_hit_rate: 0.85, raw_data: { blockers_helped: 5 } }
-const velocityRows = [{ week_start: '2026-07-21', closed: 4 }, { week_start: '2026-07-14', closed: 3 }]
-const workloadRow = { overdue: 1, due_soon: 2, high_priority: 3, avg_age_days: 15, max_age_days: 45, tickets_7plus: 4, tickets_15plus: 2 }
-const capacityRow = { current_workload_pct: 60, available_capacity_pct: 40, predicted_free_date: '2026-08-15' }
+const perfRow = {
+  overall_score: 75,
+  trend: 'rising',
+  score_delta: 5,
+  output_score: 80,
+  speed_score: 70,
+  quality_score: 85,
+  reliability_score: 65,
+  collaboration_score: 70,
+  tickets_closed: 12,
+  tickets_in_progress: 3,
+  tickets_overdue: 1,
+  tickets_reopened: 1,
+  hours_logged: 120,
+  avg_resolution_time_hrs: 18,
+  reopen_rate: 0.08,
+  deadline_hit_rate: 0.85,
+  raw_data: { blockers_helped: 5 },
+}
+const velocityRows = [
+  { week_start: '2026-07-21', closed: 4 },
+  { week_start: '2026-07-14', closed: 3 },
+]
+const workloadRow = {
+  overdue: 1,
+  due_soon: 2,
+  high_priority: 3,
+  avg_age_days: 15,
+  max_age_days: 45,
+  tickets_7plus: 4,
+  tickets_15plus: 2,
+}
+const capacityRow = {
+  current_workload_pct: 60,
+  available_capacity_pct: 40,
+  predicted_free_date: '2026-08-15',
+}
 const teamHealthRow = { overall_score: 70, reopen_rate: 0.1, on_time_delivery_rate: 0.8 }
 
 function setupFull() {
@@ -54,8 +98,13 @@ function setupFull() {
   mockSql.mockResolvedValueOnce([workloadRow])
   mockSql.mockResolvedValueOnce([capacityRow])
   mockSql.mockResolvedValueOnce([{ hours_this_month: 80, days_logged: 15 }])
-  mockSql.mockResolvedValueOnce([{ hours_last_7days: 20, last_log_date: '2026-07-28', days_since_last_log: 0 }])
-  mockSql.mockResolvedValueOnce([{ status: 'kept', count: 8 }, { status: 'missed', count: 2 }])
+  mockSql.mockResolvedValueOnce([
+    { hours_last_7days: 20, last_log_date: '2026-07-28', days_since_last_log: 0 },
+  ])
+  mockSql.mockResolvedValueOnce([
+    { status: 'kept', count: 8 },
+    { status: 'missed', count: 2 },
+  ])
   mockSql.mockResolvedValueOnce([teamHealthRow])
   mockSql.mockResolvedValueOnce([{ team_avg: 68 }])
 }
@@ -126,23 +175,25 @@ describe('GET /api/people/[id]/profile', () => {
     expect(res.statusData.person.name).toBe('Alice')
   })
 
-  it('handles user with no dashboard_users link', async () => {
+  it('returns performance even without dashboard_users link', async () => {
     getCurrentUser.mockResolvedValue({ id: 100, role: 'manager', team: 'AI' })
     mockSql.mockResolvedValueOnce([personRow])
     mockSql.mockResolvedValueOnce([])
     mockSql.mockResolvedValueOnce([])
-    mockSql.mockResolvedValueOnce([])
+    mockSql.mockResolvedValueOnce([perfRow])
+    mockSql.mockResolvedValueOnce(velocityRows)
     mockSql.mockResolvedValueOnce([{ active_tickets: 0 }])
     mockSql.mockResolvedValueOnce([{}])
     mockSql.mockResolvedValueOnce([])
+    mockSql.mockResolvedValueOnce([{ hours_this_month: 0, days_logged: 0 }])
     mockSql.mockResolvedValueOnce([{}])
-    mockSql.mockResolvedValueOnce([])
     mockSql.mockResolvedValueOnce([teamHealthRow])
     mockSql.mockResolvedValueOnce([{ team_avg: 68 }])
     const res = mockRes()
     await handler(mockReq(), res)
     expect(res.statusCode).toBe(200)
-    expect(res.statusData.performance).toBeNull()
+    expect(res.statusData.performance).not.toBeNull()
+    expect(res.statusData.performance.overall_score).toBe(75)
     expect(res.statusData.commitments.total).toBe(0)
   })
 

@@ -1,6 +1,6 @@
-import { getDb } from '../../../../lib/db'
-import { getCurrentUser } from '../../../../lib/auth'
 import { send500 } from '../../../../lib/api-error'
+import { getCurrentUser } from '../../../../lib/auth'
+import { getDb } from '../../../../lib/db'
 
 const VALID_PERIODS = ['daily', 'weekly', 'monthly']
 
@@ -57,18 +57,14 @@ export default async function handler(req, res) {
     // ── Phase 2: All parallel queries ──────────────────────────────
     const promises = []
 
-    // 4. Performance snapshot
-    if (dashboardUserId) {
-      promises.push(
-        sql`
-          SELECT * FROM performance_snapshots
-          WHERE user_id = ${dashboardUserId} AND period = ${period}
-          ORDER BY snapshot_date DESC LIMIT 1
-        `.then(rows => ({ key: 'performance', data: rows[0] || null }))
-      )
-    } else {
-      promises.push(Promise.resolve({ key: 'performance', data: null }))
-    }
+    // 4. Performance snapshot (uses users.id directly — no dashboard_users needed)
+    promises.push(
+      sql`
+        SELECT * FROM performance_snapshots
+        WHERE user_id = ${userId} AND period = ${period}
+        ORDER BY snapshot_date DESC LIMIT 1
+      `.then((rows) => ({ key: 'performance', data: rows[0] || null })),
+    )
 
     // 5. Velocity (tickets closed per week, last 8 weeks)
     promises.push(
@@ -81,7 +77,7 @@ export default async function handler(req, res) {
           AND closed_at >= NOW() - INTERVAL '8 weeks'
         GROUP BY week_start
         ORDER BY week_start
-      `.then(rows => {
+      `.then((rows) => {
         // Gap-fill missing weeks
         const weekMap = {}
         for (const r of rows) {
@@ -102,13 +98,23 @@ export default async function handler(req, res) {
         const ticketsPerWeek = breakdown.length > 0 ? total / breakdown.length : 0
         // Trend: compare first half vs second half
         const mid = Math.floor(breakdown.length / 2)
-        const firstAvg = breakdown.slice(0, mid).reduce((s, w) => s + w.closed, 0) / Math.max(mid, 1)
-        const secondAvg = breakdown.slice(mid).reduce((s, w) => s + w.closed, 0) / Math.max(breakdown.length - mid, 1)
+        const firstAvg =
+          breakdown.slice(0, mid).reduce((s, w) => s + w.closed, 0) / Math.max(mid, 1)
+        const secondAvg =
+          breakdown.slice(mid).reduce((s, w) => s + w.closed, 0) /
+          Math.max(breakdown.length - mid, 1)
         let trend = 'stable'
         if (secondAvg - firstAvg > 0.5) trend = 'accelerating'
         else if (secondAvg - firstAvg < -0.5) trend = 'decelerating'
-        return { key: 'velocity', data: { tickets_per_week: Math.round(ticketsPerWeek * 100) / 100, trend, weekly_breakdown: breakdown } }
-      })
+        return {
+          key: 'velocity',
+          data: {
+            tickets_per_week: Math.round(ticketsPerWeek * 100) / 100,
+            trend,
+            weekly_breakdown: breakdown,
+          },
+        }
+      }),
     )
 
     // 6. Workload: active ticket count
@@ -118,7 +124,7 @@ export default async function handler(req, res) {
         FROM issues
         WHERE assigned_to_id = ${userId}
           AND status NOT IN ('Closed','Resolved','Verified','Rejected')
-      `.then(rows => ({ key: 'active_tickets', data: rows[0]?.active_tickets || 0 }))
+      `.then((rows) => ({ key: 'active_tickets', data: rows[0]?.active_tickets || 0 })),
     )
 
     // 7. Workload detail (overdue, due_soon, high_priority, age)
@@ -135,7 +141,7 @@ export default async function handler(req, res) {
         FROM issues
         WHERE assigned_to_id = ${userId}
           AND status NOT IN ('Closed','Resolved','Verified','Rejected')
-      `.then(rows => ({ key: 'workload_detail', data: rows[0] || {} }))
+      `.then((rows) => ({ key: 'workload_detail', data: rows[0] || {} })),
     )
 
     // 8. Capacity status
@@ -145,7 +151,7 @@ export default async function handler(req, res) {
           SELECT current_workload_pct, available_capacity_pct, predicted_free_date
           FROM capacity_status
           WHERE user_id = ${dashboardUserId}
-        `.then(rows => ({ key: 'capacity', data: rows[0] || null }))
+        `.then((rows) => ({ key: 'capacity', data: rows[0] || null })),
       )
     } else {
       promises.push(Promise.resolve({ key: 'capacity', data: null }))
@@ -159,7 +165,10 @@ export default async function handler(req, res) {
         FROM time_entries
         WHERE user_id = ${userId}
           AND spent_on >= date_trunc('month', CURRENT_DATE)
-      `.then(rows => ({ key: 'time_month', data: rows[0] || { hours_this_month: 0, days_logged: 0 } }))
+      `.then((rows) => ({
+        key: 'time_month',
+        data: rows[0] || { hours_this_month: 0, days_logged: 0 },
+      })),
     )
 
     // 10. Time logging (recent)
@@ -171,7 +180,10 @@ export default async function handler(req, res) {
         FROM time_entries
         WHERE user_id = ${userId}
           AND spent_on >= CURRENT_DATE - 7
-      `.then(rows => ({ key: 'time_recent', data: rows[0] || { hours_last_7days: 0, last_log_date: null, days_since_last_log: null } }))
+      `.then((rows) => ({
+        key: 'time_recent',
+        data: rows[0] || { hours_last_7days: 0, last_log_date: null, days_since_last_log: null },
+      })),
     )
 
     // 11. Commitments
@@ -182,15 +194,28 @@ export default async function handler(req, res) {
           FROM commitments
           WHERE user_id = ${dashboardUserId}
           GROUP BY status
-        `.then(rows => {
+        `.then((rows) => {
           const counts = { pending: 0, kept: 0, missed: 0, followed_up: 0 }
           for (const r of rows) counts[r.status] = r.count
           const total = counts.kept + counts.missed
-          return { key: 'commitments', data: { total, kept: counts.kept, missed: counts.missed, kept_rate: total > 0 ? Math.round((counts.kept / total) * 100) : null } }
-        })
+          return {
+            key: 'commitments',
+            data: {
+              total,
+              kept: counts.kept,
+              missed: counts.missed,
+              kept_rate: total > 0 ? Math.round((counts.kept / total) * 100) : null,
+            },
+          }
+        }),
       )
     } else {
-      promises.push(Promise.resolve({ key: 'commitments', data: { total: 0, kept: 0, missed: 0, kept_rate: null } }))
+      promises.push(
+        Promise.resolve({
+          key: 'commitments',
+          data: { total: 0, kept: 0, missed: 0, kept_rate: null },
+        }),
+      )
     }
 
     // 12. Team health
@@ -200,7 +225,7 @@ export default async function handler(req, res) {
         FROM team_health
         WHERE team = ${person.team}
         ORDER BY week_start DESC LIMIT 1
-      `.then(rows => ({ key: 'team_health', data: rows[0] || null }))
+      `.then((rows) => ({ key: 'team_health', data: rows[0] || null })),
     )
 
     // 13. Team average performance score
@@ -208,15 +233,15 @@ export default async function handler(req, res) {
       sql`
         SELECT AVG(ps.overall_score)::float AS team_avg
         FROM performance_snapshots ps
-        JOIN dashboard_users du ON du.id = ps.user_id
-        WHERE du.team = ${person.team}
+        JOIN users u ON u.id = ps.user_id
+        WHERE u.team = ${person.team}
           AND ps.period = ${period}
           AND ps.snapshot_date = (
             SELECT MAX(ps2.snapshot_date)
             FROM performance_snapshots ps2
             WHERE ps2.user_id = ps.user_id AND ps2.period = ${period}
           )
-      `.then(rows => ({ key: 'team_avg', data: rows[0]?.team_avg || null }))
+      `.then((rows) => ({ key: 'team_avg', data: rows[0]?.team_avg || null })),
     )
 
     const results = await Promise.all(promises)
@@ -245,38 +270,43 @@ export default async function handler(req, res) {
     })()
 
     const daysLogged = timeMonth?.days_logged || 0
-    const loggingStatus = (timeRecent?.hours_last_7days || 0) === 0
-      ? 'No Log This Week'
-      : (timeRecent?.days_since_last_log ?? 99) >= 3
-        ? 'No Log in 3+ Days'
-        : 'Logged Recently'
+    const loggingStatus =
+      (timeRecent?.hours_last_7days || 0) === 0
+        ? 'No Log This Week'
+        : (timeRecent?.days_since_last_log ?? 99) >= 3
+          ? 'No Log in 3+ Days'
+          : 'Logged Recently'
 
     const response = {
       person: { ...person, leave },
-      performance: perf ? {
-        overall_score: perf.overall_score,
-        trend: perf.trend,
-        score_delta: perf.score_delta,
-        output_score: perf.output_score,
-        speed_score: perf.speed_score,
-        quality_score: perf.quality_score,
-        reliability_score: perf.reliability_score,
-        collaboration_score: perf.collaboration_score,
-        tickets_closed: perf.tickets_closed,
-        tickets_in_progress: perf.tickets_in_progress,
-        tickets_overdue: perf.tickets_overdue,
-        tickets_reopened: perf.tickets_reopened,
-        hours_logged: perf.hours_logged,
-        avg_resolution_time_hrs: perf.avg_resolution_time_hrs,
-        reopen_rate: perf.reopen_rate,
-        deadline_hit_rate: perf.deadline_hit_rate,
-        blockers_helped: parseInt(perf.raw_data?.blockers_helped || 0),
-      } : null,
+      performance: perf
+        ? {
+            overall_score: perf.overall_score,
+            trend: perf.trend,
+            score_delta: perf.score_delta,
+            output_score: perf.output_score,
+            speed_score: perf.speed_score,
+            quality_score: perf.quality_score,
+            reliability_score: perf.reliability_score,
+            collaboration_score: perf.collaboration_score,
+            tickets_closed: perf.tickets_closed,
+            tickets_in_progress: perf.tickets_in_progress,
+            tickets_overdue: perf.tickets_overdue,
+            tickets_reopened: perf.tickets_reopened,
+            hours_logged: perf.hours_logged,
+            avg_resolution_time_hrs: perf.avg_resolution_time_hrs,
+            reopen_rate: perf.reopen_rate,
+            deadline_hit_rate: perf.deadline_hit_rate,
+            blockers_helped: parseInt(perf.raw_data?.blockers_helped || 0),
+          }
+        : null,
       velocity: byKey.velocity,
       workload: {
         active_tickets: workloadActive,
         workload_pct: cap?.current_workload_pct ?? Math.min((workloadActive / 10) * 100, 100),
-        available_capacity_pct: cap?.available_capacity_pct ?? Math.max(100 - Math.min((workloadActive / 10) * 100, 100), 0),
+        available_capacity_pct:
+          cap?.available_capacity_pct ??
+          Math.max(100 - Math.min((workloadActive / 10) * 100, 100), 0),
         predicted_free_date: cap?.predicted_free_date ?? null,
         overdue: workloadDetail?.overdue ?? 0,
         due_soon: workloadDetail?.due_soon ?? 0,
@@ -300,10 +330,13 @@ export default async function handler(req, res) {
         team_overall_score: byKey.team_health?.overall_score ?? null,
         team_reopen_rate: byKey.team_health?.reopen_rate ?? null,
         team_on_time_delivery: byKey.team_health?.on_time_delivery_rate ?? null,
-        individual_vs_team: perf && byKey.team_avg != null ? {
-          score_diff: Math.round(perf.overall_score - byKey.team_avg),
-          is_above_average: perf.overall_score > byKey.team_avg,
-        } : null,
+        individual_vs_team:
+          perf && byKey.team_avg != null
+            ? {
+                score_diff: Math.round(perf.overall_score - byKey.team_avg),
+                is_above_average: perf.overall_score > byKey.team_avg,
+              }
+            : null,
       },
     }
 

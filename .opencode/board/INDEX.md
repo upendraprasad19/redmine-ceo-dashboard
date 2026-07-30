@@ -4,7 +4,7 @@
 _No active tasks._
 
 ## Backlog
-- [performance-users-id-migration](backlog/029-performance-users-id-migration.md) — Switch performance_snapshots.user_id from dashboard_users(id) to users(id) to unblock PM Pulse metrics for all team members
+_No backlog tasks._
 
 ## Done
 - [fix-sync-endpoint](done/001-fix-sync-endpoint.md) — Fix `pages/api/sync.js` — Delivery Owner mapping, project filtering, issue_team_history
@@ -34,6 +34,7 @@ _No active tasks._
 - [default-tickets-sort](done/026-default-tickets-sort.md) — Default sort tickets by created date descending (latest first)
 - [audit-fix-execution](done/027-audit-fix-execution.md) — Execute audit fix plan: P0+P1+P2 fixes across 23 files
 - [rate-limiting-batch-d](done/028-rate-limiting-batch-d.md) — Add rate limiting to password reset, chat, and sync endpoints (AUD-011/012/013)
+- [performance-users-id-migration](done/029-performance-users-id-migration.md) — Switch performance_snapshots.user_id from dashboard_users(id) to users(id) to unblock PM Pulse metrics for all team members
 - [board-utils-sentinel-fix](done/030-board-utils-sentinel-fix.md) — Fix board-utils sentinel parsing to use ISO content instead of mtime, fix flaky tests
 - [retro-trigger-enforcement](done/031-retro-trigger-enforcement.md) — Add retro check to board.js done, new retro/retro-mark commands, shared board-utils.js helper
 

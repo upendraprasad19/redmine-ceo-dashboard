@@ -87,7 +87,7 @@ async function matchTicketToDeveloper(ticketId) {
         const perfRows = await sql`
           SELECT overall_score
           FROM performance_snapshots
-          WHERE user_id = ${dev.dashboard_user_id}
+          WHERE user_id = ${uid}
           ORDER BY snapshot_date DESC
           LIMIT 1
         `

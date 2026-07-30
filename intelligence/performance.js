@@ -25,15 +25,14 @@ async function calculatePerformanceScores(period = 'daily') {
     // Determine date range based on period
     const { startDate, prevStart, prevEnd } = getPeriodDates(period)
 
-    // Get all dashboard_users that are linked to Redmine users
-    const dashUsers = await sql`
-      SELECT du.id AS dashboard_user_id, du.linked_redmine_user_id, du.team
-      FROM dashboard_users du
-      WHERE du.active = true
-        AND du.linked_redmine_user_id IS NOT NULL
+    // Get all active users (performance uses users.id directly)
+    const allUsers = await sql`
+      SELECT id, team
+      FROM users
+      WHERE active = true
     `
 
-    if (!dashUsers || dashUsers.length === 0) return results
+    if (!allUsers || allUsers.length === 0) return results
 
     // Fetch global averages for normalisation
     const avgRows = await sql`
@@ -54,10 +53,9 @@ async function calculatePerformanceScores(period = 'daily') {
     const avgClosed = avgRows?.[0]?.avg_closed || 1
     const avgResolution = avgRows?.[0]?.avg_resolution || 24
 
-    for (const user of dashUsers) {
+    for (const user of allUsers) {
       try {
-        const uid = user.linked_redmine_user_id
-        const duid = user.dashboard_user_id
+        const uid = user.id
 
         // ── Gather raw metrics ──────────────────────────────────
         const metrics = await sql`
@@ -164,7 +162,7 @@ async function calculatePerformanceScores(period = 'daily') {
         const prevRows = await sql`
           SELECT overall_score
           FROM performance_snapshots
-          WHERE user_id = ${duid}
+          WHERE user_id = ${uid}
             AND period = ${period}
             AND snapshot_date >= ${prevStart}
             AND snapshot_date <= ${prevEnd}
@@ -199,7 +197,7 @@ async function calculatePerformanceScores(period = 'daily') {
             output_score, speed_score, quality_score, reliability_score, collaboration_score,
             overall_score, score_delta, trend, raw_data, created_at
           ) VALUES (
-            ${duid}, ${today}, ${period},
+            ${uid}, ${today}, ${period},
             ${ticketsClosed}, ${ticketsInProgress}, ${ticketsOverdue}, ${ticketsReopened},
             ${hoursLogged}, ${avgResolutionHrs}, ${reopenRate}, ${deadlineHitRate},
             ${outputScore}, ${speedScore}, ${qualityScore}, ${reliabilityScore}, ${collaborationScore},
@@ -234,7 +232,7 @@ async function calculatePerformanceScores(period = 'daily') {
           delta: scoreDelta,
         })
       } catch (userErr) {
-        console.error(`performance: error for user ${user.dashboard_user_id}:`, userErr.message)
+        console.error(`performance: error for user ${user.id}:`, userErr.message)
       }
     }
   } catch (err) {
@@ -274,8 +272,8 @@ async function getTeamPerformance(team, period = 'daily') {
     const rows = await sql`
       SELECT ps.*
       FROM performance_snapshots ps
-      JOIN dashboard_users du ON du.id = ps.user_id
-      WHERE du.team = ${team}
+      JOIN users u ON u.id = ps.user_id
+      WHERE u.team = ${team}
         AND ps.period = ${period}
         AND ps.snapshot_date = (
           SELECT MAX(snapshot_date)

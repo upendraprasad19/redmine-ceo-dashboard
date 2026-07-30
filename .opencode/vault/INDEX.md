@@ -35,6 +35,7 @@
 - [[unhandled-async-before-trycatch]] — Unhandled async error before try/catch returns HTML 500, breaks client JSON parsing
 - [[discipline-protocol-not-followed]] — Task-focused mindset overrides protocol; need visible checklist in every session
 - [[protocol-is-advisory-until-enforced]] — Documentation protocols fail; need automated hooks to enforce discipline
+- [[performance-snapshots-fk-wrong-table]] — performance_snapshots FK pointed at dashboard_users(id) instead of users(id), scoring 0 users
 
 ## Tags
 - See `tags/INDEX.md` for tag index.
