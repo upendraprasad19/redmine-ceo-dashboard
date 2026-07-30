@@ -226,7 +226,7 @@ async function calculatePerformanceScores(period = 'daily') {
         `
 
         results.push({
-          userId: duid,
+          userId: uid,
           overallScore,
           trend,
           delta: scoreDelta,
