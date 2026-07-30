@@ -39,7 +39,7 @@
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.9.13",
     "openai": "^4.58.0",
-    "pg": "^8.11.3",
+    "pg": "^8.22.0",
     "react": "^18",
     "react-dom": "^18",
     "remotion": "^4.0.441",
