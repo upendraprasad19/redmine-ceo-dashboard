@@ -3,7 +3,7 @@
 
 audit_date: "2026-07-28"
 total_findings: 40
-closed_count: 23
+closed_count: 26
 
 # Terminal States:
 # - closed_in_commit: Fixed and verified in a commit
@@ -65,16 +65,19 @@ findings:
     fixed_in: "pages/api/chat.js, one-on-one.js, sync.js, sync-full.js, sync-leave.js, auth/login.js"
     
   - id: AUD-011
-    terminal_state: blocked_on_user
-    summary: "No rate limiting on password reset — DEFERRED: requires checkRateLimit addition"
+    terminal_state: closed_in_commit
+    summary: "No rate limiting on password reset — FIXED: added 5 req/min per IP"
+    fixed_in: "pages/api/auth/forgot-password/request.js, verify.js"
     
   - id: AUD-012
-    terminal_state: blocked_on_user
-    summary: "No rate limiting on /api/chat — DEFERRED: requires checkRateLimit addition"
+    terminal_state: closed_in_commit
+    summary: "No rate limiting on /api/chat — FIXED: added 30 req/min per user"
+    fixed_in: "pages/api/chat.js"
     
   - id: AUD-013
-    terminal_state: blocked_on_user
-    summary: "No rate limiting on /api/sync — DEFERRED: requires rate limit + timestamp check"
+    terminal_state: closed_in_commit
+    summary: "No rate limiting on /api/sync — FIXED: added 1 req/min per user"
+    fixed_in: "pages/api/sync.js"
     
   - id: AUD-014
     terminal_state: blocked_on_user

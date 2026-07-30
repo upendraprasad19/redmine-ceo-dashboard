@@ -6,6 +6,7 @@ const { getDb } = require('../../lib/db')
 const { normalizeEmail } = require('../../lib/email-utils')
 const { STATUS_MAP, PRIORITY_MAP, APPROVED_PROJECT_IDS } = require('../../lib/constants')
 const { send500 } = require('../../lib/api-error')
+const { checkRateLimit } = require('../../lib/rate-limit')
 
 const REDMINE_URL = (process.env.REDMINE_URL || '').replace(/\/$/, '')
 const REDMINE_KEY = process.env.REDMINE_API_KEY
@@ -90,16 +91,34 @@ export default async function handler(req, res) {
   const bearerToken = authHeader.replace('Bearer ', '')
   const headerSecret = req.headers['x-cron-secret']
   let isAuth = false
+  let userId = 'cron'
   if (cronSecret && (bearerToken === cronSecret || headerSecret === cronSecret)) {
     isAuth = true
   }
   if (!isAuth) {
     const { getCurrentUser } = require('../../lib/auth')
     const user = await getCurrentUser(req)
-    if (user) isAuth = true
+    if (user) {
+      isAuth = true
+      userId = String(user.id)
+    }
   }
   if (!isAuth) {
     return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  // Rate limit: 1 request per minute per user — fail-open if Redis is down
+  try {
+    const { allowed, retryAfter } = await checkRateLimit(`ratelimit:sync:${userId}`, {
+      windowSec: 60,
+      max: 1,
+    })
+    if (!allowed) {
+      res.setHeader('Retry-After', String(retryAfter))
+      return res.status(429).json({ error: 'Too many requests. Please try again later.' })
+    }
+  } catch (rlErr) {
+    console.warn('sync: Rate-limit check failed (Redis down?):', rlErr.message)
   }
 
   try {

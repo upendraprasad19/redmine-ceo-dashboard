@@ -40,6 +40,7 @@
 - [[api-error-sanitization]] — All API routes use send500() to avoid leaking err.message
 - [[rate-limiting-sliding-window]] — Upstash Redis sliding window rate limiter for sensitive endpoints
 - [[fail-open-rate-limit]] — Rate limiting must fail-open (never block auth) when Redis is down
+- [[rate-limit-nested-trycatch]] — Rate limit checks must have own nested try/catch for fail-open
 
 ## Protocol
 - After every `done` task, run `skill self-learning` to extract new patterns/gotchas

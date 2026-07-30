@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { getDb } = require('../../../../lib/db')
 const { send500 } = require('../../../../lib/api-error')
+const { checkRateLimit } = require('../../../../lib/rate-limit')
 
 const MAX_ATTEMPTS = 5
 
@@ -11,6 +12,24 @@ export default async function handler(req, res) {
   try {
     const { username, code } = req.body || {}
     if (!username || !code) return res.status(400).json({ error: 'username and code required' })
+
+    // Rate limit: 5 attempts per minute per IP — fail-open if Redis is down
+    try {
+      const ip =
+        req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+        req.socket?.remoteAddress ||
+        'unknown'
+      const { allowed, retryAfter } = await checkRateLimit(`ratelimit:fp-verify:${ip}`, {
+        windowSec: 60,
+        max: 5,
+      })
+      if (!allowed) {
+        res.setHeader('Retry-After', String(retryAfter))
+        return res.status(429).json({ error: 'Too many requests. Please try again later.' })
+      }
+    } catch (rlErr) {
+      console.warn('forgot-password-verify: Rate-limit check failed (Redis down?):', rlErr.message)
+    }
 
     const sql = getDb()
     const userRows =

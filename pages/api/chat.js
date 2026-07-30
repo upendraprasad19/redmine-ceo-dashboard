@@ -5,6 +5,7 @@ const { getRecentMessages, saveMessage } = require('../../lib/redis')
 const { tools } = require('../../lib/gpt-tools')
 const { executeToolCall } = require('../../lib/gpt-executor')
 const { send500 } = require('../../lib/api-error')
+const { checkRateLimit } = require('../../lib/rate-limit')
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -12,6 +13,20 @@ export default async function handler(req, res) {
   try {
     const user = await getCurrentUser(req)
     if (!user) return res.status(401).json({ error: 'Not authenticated' })
+
+    // Rate limit: 30 requests per minute per user — fail-open if Redis is down
+    try {
+      const { allowed, retryAfter } = await checkRateLimit(`ratelimit:chat:${user.id}`, {
+        windowSec: 60,
+        max: 30,
+      })
+      if (!allowed) {
+        res.setHeader('Retry-After', String(retryAfter))
+        return res.status(429).json({ error: 'Too many requests. Please try again later.' })
+      }
+    } catch (rlErr) {
+      console.warn('chat: Rate-limit check failed (Redis down?):', rlErr.message)
+    }
 
     const { message } = req.body
     if (!message?.trim()) {
