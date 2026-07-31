@@ -1,0 +1,39 @@
+name: redmine-sync
+
+on:
+  schedule:
+    - cron: '0 1 * * *'     # daily at 01:00 UTC
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Full backfill (--full flag)'
+        type: boolean
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      REDMINE_API_KEY: ${{ secrets.REDMINE_API_KEY }}
+      REDMINE_URL: ${{ secrets.REDMINE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Redmine delta sync (14-day time-entry buffer)
+        run: node scripts/sync-redmine.js ${{ inputs.full && '--full' || '' }}
+
+      - name: Weekly issue reconcile (self-skips if <7d since last run)
+        run: >-
+          node -e "
+          require('./crons/weekly-reconcile.js')
+            .runWeeklyReconcile()
+            .then(r => { console.log('Reconcile:', JSON.stringify(r)); process.exit(0); })
+            .catch(e => { console.error(e); process.exit(1); })
+          "

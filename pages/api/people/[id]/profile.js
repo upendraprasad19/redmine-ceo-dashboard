@@ -174,12 +174,12 @@ export default async function handler(req, res) {
     // 10. Time logging (recent)
     promises.push(
       sql`
-        SELECT COALESCE(SUM(hours), 0)::float AS hours_last_7days,
+        SELECT COALESCE(SUM(CASE WHEN spent_on >= CURRENT_DATE - 6 THEN hours ELSE 0 END), 0)::float AS hours_last_7days,
                MAX(spent_on) AS last_log_date,
                (CURRENT_DATE - MAX(spent_on))::int AS days_since_last_log
         FROM time_entries
         WHERE user_id = ${userId}
-          AND spent_on >= CURRENT_DATE - 7
+          AND spent_on >= CURRENT_DATE - 30
       `.then((rows) => ({
         key: 'time_recent',
         data: rows[0] || { hours_last_7days: 0, last_log_date: null, days_since_last_log: null },

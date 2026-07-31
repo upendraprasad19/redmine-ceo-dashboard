@@ -126,16 +126,25 @@ export default async function handler(req, res) {
     const log = []
 
     // Determine sync window from sync_state (consistent with scripts/sync-redmine.js)
-    let sinceDate
+    let sinceDate, timeEntriesSince
     const lastRow = await sql`SELECT value FROM sync_state WHERE key = 'last_synced_at'`
     if (lastRow.length > 0 && lastRow[0].value) {
       const last = new Date(lastRow[0].value)
-      last.setDate(last.getDate() - 1) // 1-day buffer
+      last.setDate(last.getDate() - 1) // 1-day buffer for issues
       sinceDate = last.toISOString().split('T')[0]
-      log.push(`Delta sync — last synced ${lastRow[0].value.substring(0, 10)}, using ${sinceDate}`)
+
+      // 7-day buffer on time entries (Redmine only has spent_on filter — catches backdated entries)
+      const teLast = new Date(lastRow[0].value)
+      teLast.setDate(teLast.getDate() - 7)
+      timeEntriesSince = teLast.toISOString().split('T')[0]
+
+      log.push(
+        `Delta sync — last synced ${lastRow[0].value.substring(0, 10)}, issues since ${sinceDate}, time entries since ${timeEntriesSince}`,
+      )
     } else {
       const cutoff = new Date(Date.now() - FALLBACK_DAYS * 24 * 60 * 60 * 1000)
       sinceDate = cutoff.toISOString().split('T')[0]
+      timeEntriesSince = sinceDate
       log.push(`No prior sync state — fallback ${FALLBACK_DAYS}d window from ${sinceDate}`)
     }
 
@@ -236,8 +245,12 @@ export default async function handler(req, res) {
     )
 
     // 5. Sync time entries (delta window, approved projects only)
-    log.push(`Syncing time entries since ${sinceDate}...`)
-    const entries = await fetchAll('/time_entries', 'time_entries', `&spent_on=>=${sinceDate}`)
+    log.push(`Syncing time entries since ${timeEntriesSince}...`)
+    const entries = await fetchAll(
+      '/time_entries',
+      'time_entries',
+      `&spent_on=>=${timeEntriesSince}`,
+    )
     const filteredEntries = entries.filter((e) => APPROVED_PROJECT_IDS.has(e.project?.id))
     for (const e of filteredEntries) {
       const userId = await getNeonUserId(sql, e.user)
